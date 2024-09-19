@@ -1,0 +1,13 @@
+numpy>=2.0.0
+scipy>=1.14.0
+pandas>=2.2.2
+matplotlib
+torch>=2.2.2
+torchvision
+torchaudio
+tensorboard
+
+black
+mypy
+pylint
+isort
