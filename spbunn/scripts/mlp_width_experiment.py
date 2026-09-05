@@ -1,4 +1,6 @@
 from typing import Union, Protocol
+import json
+import os
 
 import numpy as np
 import torch
@@ -128,28 +130,150 @@ GENERATING_FUNCTIONS = {
     "periodic": periodic_function,
 }
 
-# 32 neurons
-#LEARNING_RATES = {
-#    "cubic": 1e-2,
-#    "gaussian": 1e-1,
-#    "periodic": 1e-1,  # try 1e-1 because 1e-2 and 1e-3 seem to converge too slowly seems to be too large
-#    "discontinuous": 1e-1,
-#}
+LR_GRID = [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1]
+LR_SEARCH_EPOCHS = 3000
+LR_EVAL_TAIL_FRACTION = 0.1
+LR_SEARCH_SEEDS = [42, 43, 44]
+LR_CACHE_PATH = "mlp_width_experiment_lrs.json"
 
 
-# 1024 neurons
-LEARNING_RATES = {
-    "cubic": 1e-2,
-    "gaussian": 1e-2,
-    "periodic": 1e-2,  # try 1e-1 because 1e-2 and 1e-3 seem to converge too slowly seems to be too large
-    "discontinuous": 1e-2,
-}
+def print_lr_search_summary(results: dict) -> None:
+    for func_name, dims in results.items():
+        for d, stats in dims.items():
+            other = stats["other_losses"]
+            if other["min"] is None:
+                other_str = "n/a (all other LRs diverged)"
+            else:
+                other_str = (
+                    f"{other['min']:.3e} / {other['mean']:.3e} / {other['max']:.3e}"
+                )
+            print(
+                f"Optimal LR for {func_name}, D = {d}: "
+                f"lr = {stats['lr']:.3e}, loss = {stats['best_loss']:.3e}, "
+                f"other LRs loss (min/mean/max): {other_str}"
+            )
+
+
+def extract_lrs(lr_search_results: dict) -> dict:
+    return {
+        func_name: {int(d): stats["lr"] for d, stats in dims.items()}
+        for func_name, dims in lr_search_results.items()
+    }
+
+
+def find_optimal_learning_rates(
+    generating_functions: dict,
+    hidden_layer_dims: list,
+) -> dict:
+    cache_meta = {
+        "lr_grid": LR_GRID,
+        "lr_search_epochs": LR_SEARCH_EPOCHS,
+        "lr_eval_tail_fraction": LR_EVAL_TAIL_FRACTION,
+        "lr_search_seeds": LR_SEARCH_SEEDS,
+        "hidden_layer_dims": hidden_layer_dims,
+        "function_names": list(generating_functions.keys()),
+    }
+    if os.path.exists(LR_CACHE_PATH):
+        with open(LR_CACHE_PATH, "r") as f:
+            cache = json.load(f)
+        if cache.get("meta") == cache_meta:
+            print(f"Loaded optimal learning rates from cache: {LR_CACHE_PATH}")
+            print_lr_search_summary(cache["results"])
+            return extract_lrs(cache["results"])
+        print(f"Cache {LR_CACHE_PATH} is outdated, re-running the LR search")
+
+    loss_fn = nn.MSELoss()
+    n_tail = max(1, int(LR_SEARCH_EPOCHS * LR_EVAL_TAIL_FRACTION))
+    scores = {}
+    combos = [
+        (func_name, d, lr)
+        for func_name in generating_functions
+        for d in hidden_layer_dims
+        for lr in LR_GRID
+    ]
+    for func_name, d, lr in tqdm(combos, desc="LR search"):
+        func = generating_functions[func_name]
+        x, y = generate_dataset(x_lims=torch.Tensor([-2., 2.]), func=func)
+        train_x = x.unsqueeze(1)
+        train_y = y.unsqueeze(1)
+
+        seed_scores = []
+        for seed in LR_SEARCH_SEEDS:
+            torch.manual_seed(seed)
+            model = ShallowReLUModel(hidden_layer_dim=d)
+            losses = []
+            trainer = Trainer(
+                after_loss_clb=lambda _x, pred_y, _epoch: losses.append(
+                    loss_fn(pred_y, train_y).item()
+                ),
+                after_backward_clb=None,
+                tb_writer=None,
+                print_losses_at_epochs=False,
+            )
+            optimizer = optim.AdamW(model.parameters(), lr=lr)
+            trainer.train(
+                n_epochs=LR_SEARCH_EPOCHS,
+                optimizer=optimizer,
+                scheduler=None,
+                model=model,
+                loss_fn=loss_fn,
+                train_x=train_x,
+                train_y=train_y,
+            )
+            tail_losses = np.asarray(losses[-n_tail:])
+            if not np.all(np.isfinite(tail_losses)):
+                seed_scores.append(np.inf)
+            else:
+                seed_scores.append(tail_losses.mean())
+        scores.setdefault(func_name, {}).setdefault(d, {})[lr] = float(
+            np.mean(seed_scores)
+        )
+
+    results = {}
+    for func_name in generating_functions:
+        assert func_name in scores, f"All LRs diverged for function: {func_name}"
+        for d in hidden_layer_dims:
+            assert d in scores[func_name], f"All LRs diverged for {func_name}, D = {d}"
+            per_lr_scores = scores[func_name][d]
+            finite_scores = {
+                lr: score for lr, score in per_lr_scores.items() if np.isfinite(score)
+            }
+            best_lr = min(finite_scores, key=finite_scores.get)
+            other_losses = [
+                score for lr, score in finite_scores.items() if lr != best_lr
+            ]
+            if other_losses:
+                other_losses_stats = {
+                    "min": float(np.min(other_losses)),
+                    "mean": float(np.mean(other_losses)),
+                    "max": float(np.max(other_losses)),
+                }
+            else:
+                other_losses_stats = {"min": None, "mean": None, "max": None}
+            results.setdefault(func_name, {})[d] = {
+                "lr": best_lr,
+                "best_loss": finite_scores[best_lr],
+                "other_losses": other_losses_stats,
+            }
+
+    print_lr_search_summary(results)
+
+    with open(LR_CACHE_PATH, "w") as f:
+        json.dump({"meta": cache_meta, "results": results}, f, indent=4)
+    print(f"Saved optimal learning rates to: {LR_CACHE_PATH}")
+    return extract_lrs(results)
 
 
 if __name__ == "__main__":
     hidden_layer_dims = [8, 16, 32, 64, 128, 256, 512, 1024]
     # hidden_layer_dims = [1024]
     hidden_layer_dim_to_plot_sequence_of_conv_curves = 1024
+    LEARNING_RATES = find_optimal_learning_rates(
+        generating_functions=GENERATING_FUNCTIONS,
+        hidden_layer_dims=hidden_layer_dims,
+    )
+    breakpoint()
+
     for func_name, func in GENERATING_FUNCTIONS.items():
         fig, ax = plt.subplots(1, 1, figsize=(6, 4))
         for d in tqdm(hidden_layer_dims, desc="Iteration over hidden layer dimensions"):
@@ -171,7 +295,7 @@ if __name__ == "__main__":
                 print_losses_at_epochs=False,
             )
             loss_fn = nn.MSELoss()
-            lr = LEARNING_RATES[func_name]
+            lr = LEARNING_RATES[func_name][d]
             n_epochs = 30000 
             optimizer = optim.AdamW(model.parameters(), lr=lr)
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1)
