@@ -264,6 +264,58 @@ def find_optimal_learning_rates(
     return extract_lrs(results)
 
 
+def select_best_seed_run(
+    func_name: str,
+    train_x: torch.Tensor,
+    train_y: torch.Tensor,
+    hidden_layer_dim: int,
+    lr: float,
+    n_epochs: int,
+) -> dict:
+    loss_fn = nn.MSELoss()
+    runs = []
+    for seed in LR_SEARCH_SEEDS:
+        torch.manual_seed(seed)
+        model = ShallowReLUModel(hidden_layer_dim=hidden_layer_dim)
+        output_collector = OutputCollector(
+            schedule_by_epoch=(1, 10, 50, 100, 1000, 10000)
+        )  # (1, 10, 50, 100, 200, 500)
+        trainer = Trainer(
+            after_loss_clb=output_collector,
+            after_backward_clb=None,
+            tb_writer=None,
+            print_losses_at_epochs=False,
+        )
+        optimizer = optim.AdamW(model.parameters(), lr=lr)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1)
+        #scheduler = None
+        trainer.train(
+            n_epochs=n_epochs,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            model=model,
+            loss_fn=loss_fn,
+            train_x=train_x,
+            train_y=train_y,
+        )
+        final_loss = loss_fn(model(train_x), train_y).item()
+        runs.append(
+            {
+                "seed": seed,
+                "model": model,
+                "output_collector": output_collector,
+                "final_loss": final_loss,
+            }
+        )
+    best_run = min(runs, key=lambda run: run["final_loss"])
+    losses_str = ", ".join(f"{run['seed']}: {run['final_loss']:.3e}" for run in runs)
+    print(
+        f"{func_name}, D = {hidden_layer_dim}, final losses (seed: loss): "
+        f"[{losses_str}]. Selected seed {best_run['seed']}"
+    )
+    return best_run
+
+
 if __name__ == "__main__":
     hidden_layer_dims = [8, 16, 32, 64, 128, 256, 512, 1024]
     # hidden_layer_dims = [1024]
@@ -272,7 +324,6 @@ if __name__ == "__main__":
         generating_functions=GENERATING_FUNCTIONS,
         hidden_layer_dims=hidden_layer_dims,
     )
-    breakpoint()
 
     for func_name, func in GENERATING_FUNCTIONS.items():
         fig, ax = plt.subplots(1, 1, figsize=(6, 4))
@@ -284,32 +335,20 @@ if __name__ == "__main__":
             )
             train_x = x.unsqueeze(1)
             train_y = y.unsqueeze(1)
-            
-            # Train the model and collect outputs on the training dataset at the same time
-            model = ShallowReLUModel(hidden_layer_dim=d)
-            output_collector = OutputCollector(schedule_by_epoch=(1, 10, 50, 100, 1000, 10000))  # (1, 10, 50, 100, 200, 500)
-            trainer = Trainer(
-                after_loss_clb=output_collector,
-                after_backward_clb=None,
-                tb_writer=None,
-                print_losses_at_epochs=False,
-            )
-            loss_fn = nn.MSELoss()
+
+            # Train the model with several seeds and keep the best run
             lr = LEARNING_RATES[func_name][d]
-            n_epochs = 30000 
-            optimizer = optim.AdamW(model.parameters(), lr=lr)
-            scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1)
-            #scheduler = None
-            trainer.train(
-                n_epochs=n_epochs,
-                optimizer=optimizer,
-                scheduler=scheduler,
-                model=model,
-                loss_fn=loss_fn,
+            n_epochs = 30000
+            best_run = select_best_seed_run(
+                func_name=func_name,
                 train_x=train_x,
                 train_y=train_y,
+                hidden_layer_dim=d,
+                lr=lr,
+                n_epochs=n_epochs,
             )
-            
+            output_collector = best_run["output_collector"]
+
             add_conv_graph_wrt_hidden_layer_dimension(
                 ax=ax,
                 train_x=train_x,
