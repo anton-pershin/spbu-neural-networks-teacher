@@ -18,14 +18,19 @@ class DeepReLUModel(nn.Module):
         super().__init__()
         assert n_layers > 0, "Number of layers must be greater than 0"
 
+        def init_weights(m):
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_uniform_(m.weight, mode='fan_in', nonlinearity='relu')
+
         sequential_layers = [nn.Linear(1, hidden_layer_dim)]
         for i in range(n_layers - 1):
-            hidden_layers += [
+            sequential_layers += [
                 nn.Linear(hidden_layer_dim, hidden_layer_dim),
                 nn.ReLU(),
             ]
         sequential_layers.append(nn.Linear(hidden_layer_dim, 1))
         self.sequential = nn.Sequential(*sequential_layers)
+        self.sequential.apply(init_weights)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         return self.sequential(input)
@@ -110,6 +115,34 @@ class OutputCollector:
             self.ys.append(y)
 
 
+class SmoothedLossCollector:
+    """Collects exponentially smoothed MAE losses at scheduled epochs.
+
+    Computes the MAE between the model prediction and train_y at every
+    epoch, maintains an EMA of the resulting scalar loss sequence, and
+    stores the smoothed loss value at the epochs listed in
+    schedule_by_epoch.
+    """
+
+    def __init__(self, schedule_by_epoch=None, train_y=None, ema_beta=0.99):
+        self.epochs = []
+        self.smoothed_losses = []
+        self.schedule_by_epoch = schedule_by_epoch
+        self.train_y = train_y
+        self.ema_beta = ema_beta
+        self._ema = None
+
+    def __call__(self, x, pred_y, epoch):
+        mae = torch.abs(pred_y.detach() - self.train_y).mean()
+        if self._ema is None:
+            self._ema = mae
+        else:
+            self._ema = self.ema_beta * self._ema + (1.0 - self.ema_beta) * mae
+        if epoch in self.schedule_by_epoch:
+            self.epochs.append(epoch)
+            self.smoothed_losses.append(self._ema.item())
+
+
 def groundtruth(x):
     return x**3 - x
 
@@ -127,6 +160,7 @@ if __name__ == "__main__":
     loss_fn = nn.MSELoss()
     lr = 1e-2
     n_epochs = 30000 
+    breakpoint()
     optimizer = optim.AdamW(model.parameters(), lr=lr)
     #scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
     scheduler = None

@@ -11,7 +11,12 @@ import matplotlib
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from spbunn.mlp.simple_relu_nn import ShallowReLUModel, OutputCollector, Trainer
+from spbunn.mlp.simple_relu_nn import (
+    ShallowReLUModel,
+    OutputCollector,
+    SmoothedLossCollector,
+    Trainer,
+)
 
 class GeneratingFunction(Protocol):
     def __call__(x: torch.Tensor) -> torch.Tensor:
@@ -93,14 +98,19 @@ def add_conv_graph_wrt_hidden_layer_dimension(
     output_collector: OutputCollector,
     true_func_name: str,
     hidden_layer_dimension: int,
+    smoothed_loss_collector: SmoothedLossCollector = None,
 ):
     n_outputs = len(output_collector.xs)
     mae_errors = torch.zeros((n_outputs,))
     for i in range(n_outputs):
-        x = output_collector.xs[i]
-        y = output_collector.ys[i]
-        mae_errors[i] = torch.abs(y.detach() - train_y.detach()).mean()
-    ax.loglog(
+        if output_collector.schedule_by_epoch[i] > 10e3 and (smoothed_loss_collector is not None):
+            mae_errors[i] = smoothed_loss_collector.epochs[i]
+        else:
+            x = output_collector.xs[i].detach()
+            y = output_collector.ys[i].detach()
+            mae_errors[i] = torch.abs(y - train_y.detach()).mean()
+
+    line, = ax.loglog(
         output_collector.schedule_by_epoch,
         mae_errors,
         "o--",
@@ -135,6 +145,8 @@ LR_SEARCH_EPOCHS = 3000
 LR_EVAL_TAIL_FRACTION = 0.1
 LR_SEARCH_SEEDS = [42, 43, 44]
 LR_CACHE_PATH = "mlp_width_experiment_lrs.json"
+OUTPUT_SCHEDULE_BY_EPOCH = (1, 10, 50, 100, 1000, 10000)
+LOSS_EMA_BETA = 0.99
 
 
 def print_lr_search_summary(results: dict) -> None:
@@ -278,10 +290,18 @@ def select_best_seed_run(
         torch.manual_seed(seed)
         model = ShallowReLUModel(hidden_layer_dim=hidden_layer_dim)
         output_collector = OutputCollector(
-            schedule_by_epoch=(1, 10, 50, 100, 1000, 10000)
-        )  # (1, 10, 50, 100, 200, 500)
+            schedule_by_epoch=OUTPUT_SCHEDULE_BY_EPOCH
+        )
+        smoothed_loss_collector = SmoothedLossCollector(
+            schedule_by_epoch=OUTPUT_SCHEDULE_BY_EPOCH,
+            train_y=train_y,
+            ema_beta=LOSS_EMA_BETA,
+        )
         trainer = Trainer(
-            after_loss_clb=output_collector,
+            after_loss_clb=lambda x, pred_y, epoch: (
+                output_collector(x, pred_y, epoch),
+                smoothed_loss_collector(x, pred_y, epoch),
+            ),
             after_backward_clb=None,
             tb_writer=None,
             print_losses_at_epochs=False,
@@ -304,6 +324,7 @@ def select_best_seed_run(
                 "seed": seed,
                 "model": model,
                 "output_collector": output_collector,
+                "smoothed_loss_collector": smoothed_loss_collector,
                 "final_loss": final_loss,
             }
         )
@@ -318,7 +339,6 @@ def select_best_seed_run(
 
 if __name__ == "__main__":
     hidden_layer_dims = [8, 16, 32, 64, 128, 256, 512, 1024]
-    # hidden_layer_dims = [1024]
     hidden_layer_dim_to_plot_sequence_of_conv_curves = 1024
     LEARNING_RATES = find_optimal_learning_rates(
         generating_functions=GENERATING_FUNCTIONS,
@@ -348,12 +368,14 @@ if __name__ == "__main__":
                 n_epochs=n_epochs,
             )
             output_collector = best_run["output_collector"]
+            smoothed_loss_collector = best_run["smoothed_loss_collector"]
 
             add_conv_graph_wrt_hidden_layer_dimension(
                 ax=ax,
                 train_x=train_x,
                 train_y=train_y,
                 output_collector=output_collector,
+                smoothed_loss_collector=smoothed_loss_collector,
                 true_func_name=func_name,
                 hidden_layer_dimension=d, 
             )

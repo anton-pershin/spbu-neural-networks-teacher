@@ -27,6 +27,14 @@ def sigmoid_grad(x):
     return np.exp(-x) / (1.0 + np.exp(-x)) ** 2
 
 
+def swish(x):
+    return x * sigmoid(x)
+
+
+def swish_grad(x):
+    return sigmoid(x) + x * np.exp(-x) / (1.0 + np.exp(-x)) ** 2
+
+
 def tanh(x):
     return np.tanh(x)
 
