@@ -103,8 +103,8 @@ def add_conv_graph_wrt_hidden_layer_dimension(
     n_outputs = len(output_collector.xs)
     mae_errors = torch.zeros((n_outputs,))
     for i in range(n_outputs):
-        if output_collector.schedule_by_epoch[i] > 10e3 and (smoothed_loss_collector is not None):
-            mae_errors[i] = smoothed_loss_collector.epochs[i]
+        if output_collector.schedule_by_epoch[i] >= 10e2 and (smoothed_loss_collector is not None):
+            mae_errors[i] = smoothed_loss_collector.smoothed_losses[i]
         else:
             x = output_collector.xs[i].detach()
             y = output_collector.ys[i].detach()
@@ -141,12 +141,18 @@ GENERATING_FUNCTIONS = {
 }
 
 LR_GRID = [1e-5, 3e-5, 1e-4, 3e-4, 1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1]
+LR_GAMMA = 0.1
+STEP_SIZE_FRACTIONS = [1 / 10, 1 / 4, 1 / 2]
 LR_SEARCH_EPOCHS = 3000
 LR_EVAL_TAIL_FRACTION = 0.1
 LR_SEARCH_SEEDS = [42, 43, 44]
 LR_CACHE_PATH = "mlp_width_experiment_lrs.json"
 OUTPUT_SCHEDULE_BY_EPOCH = (1, 10, 50, 100, 1000, 10000)
-LOSS_EMA_BETA = 0.99
+LOSS_EMA_BETA = 0.9
+
+
+def step_size_for(fraction: float, n_epochs: int) -> int:
+    return max(1, round(fraction * n_epochs))
 
 
 def print_lr_search_summary(results: dict) -> None:
@@ -161,14 +167,23 @@ def print_lr_search_summary(results: dict) -> None:
                 )
             print(
                 f"Optimal LR for {func_name}, D = {d}: "
-                f"lr = {stats['lr']:.3e}, loss = {stats['best_loss']:.3e}, "
-                f"other LRs loss (min/mean/max): {other_str}"
+                f"lr = {stats['lr']:.3e}, "
+                f"step_size = {stats['step_size_fraction']:.2f} of search "
+                f"({step_size_for(stats['step_size_fraction'], LR_SEARCH_EPOCHS)} epochs), "
+                f"loss = {stats['best_loss']:.3e}, "
+                f"other configurations loss (min/mean/max): {other_str}"
             )
 
 
-def extract_lrs(lr_search_results: dict) -> dict:
+def extract_best_hyperparameters(lr_search_results: dict) -> dict:
     return {
-        func_name: {int(d): stats["lr"] for d, stats in dims.items()}
+        func_name: {
+            int(d): {
+                "lr": stats["lr"],
+                "step_size_fraction": stats["step_size_fraction"],
+            }
+            for d, stats in dims.items()
+        }
         for func_name, dims in lr_search_results.items()
     }
 
@@ -179,6 +194,8 @@ def find_optimal_learning_rates(
 ) -> dict:
     cache_meta = {
         "lr_grid": LR_GRID,
+        "lr_gamma": LR_GAMMA,
+        "step_size_fractions": STEP_SIZE_FRACTIONS,
         "lr_search_epochs": LR_SEARCH_EPOCHS,
         "lr_eval_tail_fraction": LR_EVAL_TAIL_FRACTION,
         "lr_search_seeds": LR_SEARCH_SEEDS,
@@ -191,19 +208,20 @@ def find_optimal_learning_rates(
         if cache.get("meta") == cache_meta:
             print(f"Loaded optimal learning rates from cache: {LR_CACHE_PATH}")
             print_lr_search_summary(cache["results"])
-            return extract_lrs(cache["results"])
+            return extract_best_hyperparameters(cache["results"])
         print(f"Cache {LR_CACHE_PATH} is outdated, re-running the LR search")
 
     loss_fn = nn.MSELoss()
     n_tail = max(1, int(LR_SEARCH_EPOCHS * LR_EVAL_TAIL_FRACTION))
     scores = {}
     combos = [
-        (func_name, d, lr)
+        (func_name, d, lr, step_size_fraction)
         for func_name in generating_functions
         for d in hidden_layer_dims
         for lr in LR_GRID
+        for step_size_fraction in STEP_SIZE_FRACTIONS
     ]
-    for func_name, d, lr in tqdm(combos, desc="LR search"):
+    for func_name, d, lr, step_size_fraction in tqdm(combos, desc="LR search"):
         func = generating_functions[func_name]
         x, y = generate_dataset(x_lims=torch.Tensor([-2., 2.]), func=func)
         train_x = x.unsqueeze(1)
@@ -223,10 +241,15 @@ def find_optimal_learning_rates(
                 print_losses_at_epochs=False,
             )
             optimizer = optim.AdamW(model.parameters(), lr=lr)
+            scheduler = optim.lr_scheduler.StepLR(
+                optimizer,
+                step_size=step_size_for(step_size_fraction, LR_SEARCH_EPOCHS),
+                gamma=LR_GAMMA,
+            )
             trainer.train(
                 n_epochs=LR_SEARCH_EPOCHS,
                 optimizer=optimizer,
-                scheduler=None,
+                scheduler=scheduler,
                 model=model,
                 loss_fn=loss_fn,
                 train_x=train_x,
@@ -237,9 +260,9 @@ def find_optimal_learning_rates(
                 seed_scores.append(np.inf)
             else:
                 seed_scores.append(tail_losses.mean())
-        scores.setdefault(func_name, {}).setdefault(d, {})[lr] = float(
-            np.mean(seed_scores)
-        )
+        scores.setdefault(func_name, {}).setdefault(d, {})[
+            (lr, step_size_fraction)
+        ] = float(np.mean(seed_scores))
 
     results = {}
     for func_name in generating_functions:
@@ -248,11 +271,16 @@ def find_optimal_learning_rates(
             assert d in scores[func_name], f"All LRs diverged for {func_name}, D = {d}"
             per_lr_scores = scores[func_name][d]
             finite_scores = {
-                lr: score for lr, score in per_lr_scores.items() if np.isfinite(score)
+                hyperparameters: score
+                for hyperparameters, score in per_lr_scores.items()
+                if np.isfinite(score)
             }
-            best_lr = min(finite_scores, key=finite_scores.get)
+            best_hyperparameters = min(finite_scores, key=finite_scores.get)
+            best_lr, best_step_size_fraction = best_hyperparameters
             other_losses = [
-                score for lr, score in finite_scores.items() if lr != best_lr
+                score
+                for hyperparameters, score in finite_scores.items()
+                if hyperparameters != best_hyperparameters
             ]
             if other_losses:
                 other_losses_stats = {
@@ -264,7 +292,8 @@ def find_optimal_learning_rates(
                 other_losses_stats = {"min": None, "mean": None, "max": None}
             results.setdefault(func_name, {})[d] = {
                 "lr": best_lr,
-                "best_loss": finite_scores[best_lr],
+                "step_size_fraction": best_step_size_fraction,
+                "best_loss": finite_scores[best_hyperparameters],
                 "other_losses": other_losses_stats,
             }
 
@@ -273,7 +302,7 @@ def find_optimal_learning_rates(
     with open(LR_CACHE_PATH, "w") as f:
         json.dump({"meta": cache_meta, "results": results}, f, indent=4)
     print(f"Saved optimal learning rates to: {LR_CACHE_PATH}")
-    return extract_lrs(results)
+    return extract_best_hyperparameters(results)
 
 
 def select_best_seed_run(
@@ -282,6 +311,7 @@ def select_best_seed_run(
     train_y: torch.Tensor,
     hidden_layer_dim: int,
     lr: float,
+    step_size_fraction: float,
     n_epochs: int,
 ) -> dict:
     loss_fn = nn.MSELoss()
@@ -307,8 +337,11 @@ def select_best_seed_run(
             print_losses_at_epochs=False,
         )
         optimizer = optim.AdamW(model.parameters(), lr=lr)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.1)
-        #scheduler = None
+        scheduler = optim.lr_scheduler.StepLR(
+            optimizer,
+            step_size=step_size_for(step_size_fraction, n_epochs),
+            gamma=LR_GAMMA,
+        )
         trainer.train(
             n_epochs=n_epochs,
             optimizer=optimizer,
@@ -357,7 +390,9 @@ if __name__ == "__main__":
             train_y = y.unsqueeze(1)
 
             # Train the model with several seeds and keep the best run
-            lr = LEARNING_RATES[func_name][d]
+            hyperparameters = LEARNING_RATES[func_name][d]
+            lr = hyperparameters["lr"]
+            step_size_fraction = hyperparameters["step_size_fraction"]
             n_epochs = 30000
             best_run = select_best_seed_run(
                 func_name=func_name,
@@ -365,6 +400,7 @@ if __name__ == "__main__":
                 train_y=train_y,
                 hidden_layer_dim=d,
                 lr=lr,
+                step_size_fraction=step_size_fraction,
                 n_epochs=n_epochs,
             )
             output_collector = best_run["output_collector"]
@@ -394,4 +430,3 @@ if __name__ == "__main__":
             ax=ax,
             true_func_name=func_name,
         )
-

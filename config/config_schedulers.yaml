@@ -1,0 +1,36 @@
+starting_lr: 0.1
+schedulers:
+  - name: "linearlr"
+    plotting_func:
+      _target_: spbunn.scripts.schedulers.plot_linearlr
+      _partial_: true
+    annotations:
+      - text: "Last epoch"
+        xy: [19, 0.045]
+        xytext: [25, 0.052]
+  - name: "steplr"
+    plotting_func:
+      _target_: spbunn.scripts.schedulers.plot_steplr
+      _partial_: true
+    alpha: 0.5
+    annotations:
+      - text: "Last epoch"
+        xy: [20, 0.02]
+        xytext: [25, 0.04]
+  - name: "reducelronplateau"
+    plotting_func:
+      _target_: spbunn.scripts.schedulers.plot_reducelronplateau
+      _partial_: true
+    alpha: 0.5
+    annotations:
+      - text: "Loss stagnation"
+        xy: [10, 0.052]
+        xytext: [14, 0.062]
+      - text: "Loss st."
+        xy: [30, 0.027]
+        xytext: [32, 0.045]
+  - name: "cosineannealing"
+    plotting_func:
+      _target_: spbunn.scripts.schedulers.plot_cosineannealing
+      _partial_: true
+    annotations:

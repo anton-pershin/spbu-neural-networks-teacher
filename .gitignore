@@ -1,3 +1,11 @@
+# vim
+*.swp
+*.swo
+
+# Plots
+*.svg
+*.png
+
 # Tensorboard logs
 /tb_log_dir/
 

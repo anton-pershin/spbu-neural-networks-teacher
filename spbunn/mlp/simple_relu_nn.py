@@ -36,6 +36,33 @@ class DeepReLUModel(nn.Module):
         return self.sequential(input)
 
 
+class DeepReLUPlainModel(nn.Module):
+    """Plain ReLU MLP with an activation after every hidden layer."""
+
+    def __init__(self, hidden_layer_dim=8, n_layers=1):
+        super().__init__()
+        assert n_layers > 0, "Number of layers must be greater than 0"
+
+        def init_weights(m):
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_uniform_(m.weight, mode="fan_in", nonlinearity="relu")
+
+        sequential_layers = []
+        input_dim = 1
+        for _ in range(n_layers):
+            sequential_layers += [
+                nn.Linear(input_dim, hidden_layer_dim),
+                nn.ReLU(),
+            ]
+            input_dim = hidden_layer_dim
+        sequential_layers.append(nn.Linear(hidden_layer_dim, 1))
+        self.sequential = nn.Sequential(*sequential_layers)
+        self.sequential.apply(init_weights)
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        return self.sequential(input)
+
+
 class ShallowReLUModel(nn.Module):
     def __init__(self, hidden_layer_dim=8):
         super().__init__()
@@ -100,7 +127,10 @@ class Trainer:
             train_loss.backward()
             optimizer.step()
             if scheduler is not None:
-                scheduler.step(train_loss)
+                if isinstance(scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+                    scheduler.step(train_loss)
+                else:
+                    scheduler.step()
 
 
 class OutputCollector:
@@ -203,4 +233,3 @@ if __name__ == "__main__":
             )
         )
         tb_writer.add_graph(model, input)
-
