@@ -61,10 +61,17 @@ class DoubleReluFunc(Func):
 
 
 class SamplingFromFunctionDataset(Dataset):
-    def __init__(self, f: Func, n: int, rng: Optional[np.random.Generator] = None) -> None:
+    def __init__(
+        self,
+        f: Func,
+        n: int,
+        rng: Optional[np.random.Generator] = None,
+        x_min: float = -10.0,
+        x_max: float = 10.0,
+    ) -> None:
         self.f = f
         self.n = n
-        self._x = np.linspace(-10, 10, n)
+        self._x = np.linspace(x_min, x_max, n)
         if rng is None:
             self._x
         else:
