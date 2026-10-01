@@ -1,0 +1,33 @@
+# Diagnostics of signal and gradient propagation in a randomly initialized MLP.
+# Single forward/backward pass per seed (no training), averaged over n_seeds.
+# Run: ~/venvs/spbu_nn/bin/python -m spbunn.scripts.hidden_norms_propagation
+
+input_dim: 16      # iid N(0,1) inputs: isotropic batch already at layer 0
+hidden_dim: 256    # H: width of every hidden layer (large H keeps the
+                   # finite-width downward drift of near-critical curves small)
+batch_size: 256
+n_seeds: 5         # random initializations averaged (mean +- std bands)
+activation: relu   # relu | tanh
+with_theory: true  # dashed theoretical curves (ReLU formula only)
+
+# Which experiments to run: [depth, init]
+experiments:
+  - depth
+  - init
+
+# Experiment 1 (Q1, Q2): fixed scale sigma = sqrt(2/H) (Kaiming for ReLU,
+# forward factor H*sigma^2/2 = 1), vary the number of layers.
+depth_grid: [1, 2, 4, 8, 16, 32, 64]
+weight_scale: 0.08838834764831845  # sqrt(2 / hidden_dim) with hidden_dim = 256
+
+# Experiment 2 (Q3): fixed depth, vary the initialization scale.
+# Per-layer forward factor = H * sigma^2 / 2 is given in the comments.
+init_sweep:
+  n_layers: 32
+  weight_scales:
+    0.5/sqrt(H): 0.03125              # factor 0.125: fast decay
+    1.0/sqrt(H): 0.0625               # factor 0.5: slow decay
+    1.25/sqrt(H): 0.078125            # factor ~0.78: near-critical decay
+    sqrt(2/H): 0.08838834764831845    # factor 1: critical (Kaiming for ReLU)
+    2.0/sqrt(H): 0.125                # factor 2: explode
+    1.0 (unscaled): 1.0               # factor 128: strong explode
