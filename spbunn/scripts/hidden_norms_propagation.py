@@ -335,6 +335,161 @@ def run_init_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     )
 
 
+def run_conditioning_experiment(
+    input_dim: int,
+    hidden_dim: int,
+    activation_name: str,
+    weight_scale: float,
+    depth_grid: list[int],
+    n_inputs: int,
+    n_perturbations: int,
+    perturbation_norm: float,
+    seeds: list[int],
+) -> dict[str, np.ndarray]:
+    """Measures input sensitivity and Jacobian conditioning vs depth.
+
+    For each random input x we compute:
+      - the empirical sensitivity: ||f(x + dx) - f(x)|| / ||dx|| for n_perturbations
+        random directions dx with ||dx|| = perturbation_norm;
+      - the exact input Jacobian J = dh_L/dx (via autograd), from which we take
+        the largest and smallest singular values and their ratio (condition
+        number). The Frobenius norm corresponds to the RMS sensitivity over
+        all directions and is expected to stay flat at the Kaiming scale,
+        while the condition number grows ~exponentially: the average hides
+        the ill-conditioning, the spectrum does not.
+    """
+    metrics: dict[str, list[float]] = {
+        "empirical_sensitivity": [],
+        "sigma_max": [],
+        "sigma_min": [],
+        "condition_number": [],
+        "jacobian_frobenius": [],
+    }
+    for seed in seeds:
+        torch.manual_seed(seed)
+        model = RandomMLP(
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            n_layers=max(depth_grid),
+            weight_scale=weight_scale,
+            activation_name=activation_name,
+        ).to(dtype=torch.float64)
+
+        def forward_n_layers(x: torch.Tensor, n_layers: int) -> torch.Tensor:
+            h = x
+            for layer in model.hidden_layers[:n_layers]:
+                h = layer(h)
+            return h
+
+        generator = torch.Generator().manual_seed(seed + 20_000)
+        xs = torch.randn(n_inputs, input_dim, dtype=torch.float64, generator=generator)
+        for n_layers in depth_grid:
+            sensitivities: list[float] = []
+            sigma_max_list: list[float] = []
+            sigma_min_list: list[float] = []
+            frobenius_list: list[float] = []
+            for x in xs:
+                x = x.detach().requires_grad_(True)
+                # Empirical perturbation sensitivity (finite differences).
+                for _ in range(n_perturbations):
+                    dx = torch.randn(input_dim, dtype=torch.float64, generator=generator)
+                    dx = dx * (perturbation_norm / dx.norm())
+                    dy = forward_n_layers(x + dx, n_layers) - forward_n_layers(x, n_layers)
+                    sensitivities.append((dy.norm() / perturbation_norm).item())
+                # Exact Jacobian spectrum.
+                jacobian = torch.autograd.functional.jacobian(
+                    lambda xx: forward_n_layers(xx, n_layers), x
+                )
+                singular_values = torch.linalg.svdvals(jacobian)
+                sigma_max_list.append(singular_values[0].item())
+                sigma_min_list.append(singular_values[-1].item())
+                frobenius_list.append(jacobian.norm().item())
+            metrics["empirical_sensitivity"].append(np.mean(sensitivities))
+            metrics["sigma_max"].append(np.mean(sigma_max_list))
+            metrics["sigma_min"].append(np.mean(sigma_min_list))
+            metrics["condition_number"].append(
+                np.mean(np.asarray(sigma_max_list) / np.asarray(sigma_min_list))
+            )
+            metrics["jacobian_frobenius"].append(np.mean(frobenius_list))
+
+    # Reorganize into per-metric arrays of shape (n_seeds, len(depth_grid)).
+    n_depths = len(depth_grid)
+    result = {
+        key: np.asarray(values).reshape(len(seeds), n_depths).mean(axis=0)
+        for key, values in metrics.items()
+    }
+    return result
+
+
+def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
+    sweep_cfg = cfg.conditioning
+    result = run_conditioning_experiment(
+        input_dim=cfg.input_dim,
+        hidden_dim=cfg.hidden_dim,
+        activation_name=cfg.activation,
+        weight_scale=cfg.weight_scale,
+        depth_grid=list(cfg.depth_grid),
+        n_inputs=sweep_cfg.n_inputs,
+        n_perturbations=sweep_cfg.n_perturbations,
+        perturbation_norm=sweep_cfg.perturbation_norm,
+        seeds=seeds,
+    )
+    depth_grid = np.asarray(cfg.depth_grid)
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    # Left: empirical sensitivity (mean over random inputs and directions).
+    axes[0].loglog(
+        depth_grid,
+        result["empirical_sensitivity"],
+        "o-",
+        color="tab:blue",
+        label=r"empirical $\|dy/dx\|$ (random $dx$)",
+    )
+    axes[0].loglog(
+        depth_grid,
+        result["jacobian_frobenius"] / np.sqrt(cfg.input_dim),
+        "s--",
+        color="tab:orange",
+        label=r"$\|J\|_F / \sqrt{d}$ (RMS over directions)",
+    )
+    axes[0].set_xlabel("Number of layers $L$", fontsize=12)
+    axes[0].set_ylabel(r"sensitivity of $h_L$ to the input", fontsize=12)
+    axes[0].set_ylim(0.5, 2.0)
+    axes[0].set_title("Average sensitivity", fontsize=13)
+    axes[0].grid(True, which="both", alpha=0.3)
+    axes[0].legend(fontsize=9)
+    # Right: Jacobian spectrum spread.
+    axes[1].loglog(depth_grid, result["sigma_max"], "o-", color="tab:red", label=r"$\sigma_{\max}$")
+    axes[1].loglog(depth_grid, result["sigma_min"], "o-", color="tab:green", label=r"$\sigma_{\min}$")
+    axes[1].loglog(
+        depth_grid,
+        result["condition_number"],
+        "o-",
+        color="tab:purple",
+        label=r"$\sigma_{\max} / \sigma_{\min}$",
+    )
+    axes[1].set_xlabel("Number of layers $L$", fontsize=12)
+    axes[1].set_ylabel("input-Jacobian singular values", fontsize=12)
+    axes[1].set_title("Jacobian conditioning", fontsize=13)
+    axes[1].grid(True, which="both", alpha=0.3)
+    axes[1].legend(fontsize=9)
+    fig.suptitle(
+        f"({cfg.activation}, $\\sigma = {cfg.weight_scale:.3f}$, "
+        f"$||dx|| = {sweep_cfg.perturbation_norm:.0e}$, {sweep_cfg.n_inputs} inputs)",
+        fontsize=12,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.savefig(f"hidden_norms_conditioning_{cfg.activation}.svg")
+    fig.savefig(f"hidden_norms_conditioning_{cfg.activation}.png", dpi=150)
+    plt.close(fig)
+    for i, n_layers in enumerate(depth_grid):
+        print(
+            f"L = {n_layers:3d}: empirical = {result['empirical_sensitivity'][i]:.3f}, "
+            f"sigma_max = {result['sigma_max'][i]:.3e}, "
+            f"sigma_min = {result['sigma_min'][i]:.3e}, "
+            f"cond = {result['condition_number'][i]:.3e}"
+        )
+
+
 def main(cfg: DictConfig) -> None:
     seeds = list(range(cfg.n_seeds))
     if "depth" in cfg.experiments:
@@ -343,6 +498,9 @@ def main(cfg: DictConfig) -> None:
     if "init" in cfg.experiments:
         run_init_sweep(cfg, seeds)
         print("Saved hidden_norms_init_*.svg/.png")
+    if "conditioning" in cfg.experiments:
+        run_conditioning_sweep(cfg, seeds)
+        print("Saved hidden_norms_conditioning_*.svg/.png")
 
 
 if __name__ == "__main__":

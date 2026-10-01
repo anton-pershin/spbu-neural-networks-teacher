@@ -14,6 +14,7 @@ with_theory: true  # dashed theoretical curves (ReLU formula only)
 experiments:
   - depth
   - init
+  - conditioning
 
 # Experiment 1 (Q1, Q2): fixed scale sigma = sqrt(2/H) (Kaiming for ReLU,
 # forward factor H*sigma^2/2 = 1), vary the number of layers.
@@ -31,3 +32,9 @@ init_sweep:
     sqrt(2/H): 0.08838834764831845    # factor 1: critical (Kaiming for ReLU)
     2.0/sqrt(H): 0.125                # factor 2: explode
     1.0 (unscaled): 1.0               # factor 128: strong explode
+
+# Experiment 3: input-Jacobian conditioning vs depth (Kaiming init).
+conditioning:
+  n_inputs: 16            # random inputs x per seed
+  n_perturbations: 8      # random directions dx per input
+  perturbation_norm: 1.0e-3
