@@ -45,7 +45,16 @@ NORM_KEYS = ("hidden_pre_norm", "grad_pre_norm", "grad_input_norm", "grad_weight
 
 
 class RandomMLP(nn.Module):
-    """MLP with n_layers hidden linear+activation layers and zero biases."""
+    """MLP with n_layers hidden linear+activation layers and zero biases.
+
+    With residual=True the layers compute h_l = h_{l-1} + branch_scale * ReLU(W h),
+    i.e. every block is an additive perturbation of the identity map instead of
+    a plain composition. For branch_scale = 1 the signal variance grows like
+    (1 + H sigma^2 / 2)^l, so the Kaiming scale no longer keeps it constant;
+    branch_scale = 1 / sqrt(L) and 1 / L are the standard "small perturbation"
+    initializations, keeping the map near the identity (see the conditioning
+    experiment) while letting the blocks still contribute.
+    """
 
     def __init__(
         self,
@@ -54,8 +63,12 @@ class RandomMLP(nn.Module):
         n_layers: int,
         weight_scale: float,
         activation_name: str,
+        residual: bool = False,
+        branch_scale: float = 1.0,
     ):
         super().__init__()
+        self.residual = residual
+        self.branch_scale = branch_scale
         act_cls = ACTIVATIONS[activation_name]
         layers = []
         in_dim = input_dim
@@ -65,6 +78,28 @@ class RandomMLP(nn.Module):
             layers.append(nn.Sequential(linear, act_cls()))
             in_dim = hidden_dim
         self.hidden_layers = nn.ModuleList(layers)
+
+    def block_forward(self, index: int, h: torch.Tensor) -> torch.Tensor:
+        """Applies hidden block `index`.
+
+        Plain: h_out = ReLU(W h). Residual: h_out = h + branch_scale * ReLU(W h)
+        (identity skip plus a scaled activated branch). The skip requires
+        matching input/output dimensions, so the first block (d -> H) is
+        always plain, as in ResNets, where the stem has no skip either.
+        """
+        linear = self.hidden_layers[index][0]
+        act = self.hidden_layers[index][1]
+        branch = act(linear(h))
+        if self.residual and linear.in_features == linear.out_features:
+            return h + self.branch_scale * branch
+        return branch
+
+    def forward_hidden(self, x: torch.Tensor, n_layers: int | None = None) -> torch.Tensor:
+        """Runs the first n_layers hidden blocks; returns the last hidden state."""
+        h = x
+        for index in range(n_layers if n_layers is not None else len(self.hidden_layers)):
+            h = self.block_forward(index, h)
+        return h
 
     def forward_with_norms(
         self,
@@ -82,23 +117,34 @@ class RandomMLP(nn.Module):
         pre_activations: list[torch.Tensor] = []
         layer_inputs: list[torch.Tensor] = []
         h = x
-        for layer in self.hidden_layers:
+        for index, layer in enumerate(self.hidden_layers):
             linear: nn.Linear = layer[0]
-            act = layer[1]
             layer_inputs.append(h)
             pre_activation = linear(h)
-            h = act(pre_activation)
             pre_activations.append(pre_activation)
             norms.append({"hidden_pre_norm": pre_activation.norm(dim=1).mean().item()})
+            h = self.block_forward(index, h)
         # Backward pass: gradients of <output, output_grad>.
         current_grad = output_grad
         for index in reversed(range(len(self.hidden_layers))):
-            layer = self.hidden_layers[index]
-            linear = layer[0]
-            grad_pre = current_grad * (pre_activations[index] > 0).to(current_grad.dtype)
-            grad_input = grad_pre @ linear.weight
-            grad_weight = grad_pre.T @ layer_inputs[index]
-            norms[index]["grad_pre_norm"] = grad_pre.norm(dim=1).mean().item()
+            linear = self.hidden_layers[index][0]
+            pre_activation = pre_activations[index]
+            # Block: z = ReLU(pre) + branch_scale * pre when residual, i.e.
+            # Jacobian I + branch_scale * diag(mask) W (the comment below the
+            # plain case describes the plain block, which has no skip term).
+            mask = (pre_activation > 0).to(current_grad.dtype)
+            # The branch scale applies only to blocks that actually have the
+            # residual skip (square blocks); the plain stem block uses scale 1.
+            effective_scale = (
+                self.branch_scale
+                if (self.residual and linear.in_features == linear.out_features)
+                else 1.0
+            )
+            grad_weight = effective_scale * (current_grad * mask).T @ layer_inputs[index]
+            grad_input = effective_scale * (current_grad * mask) @ linear.weight
+            if self.residual and linear.in_features == linear.out_features:
+                grad_input = grad_input + current_grad
+            norms[index]["grad_pre_norm"] = (current_grad * mask).norm(dim=1).mean().item()
             norms[index]["grad_input_norm"] = grad_input.norm(dim=1).mean().item()
             norms[index]["grad_weight_norm"] = grad_weight.norm().item()
             current_grad = grad_input
@@ -345,7 +391,8 @@ def run_conditioning_experiment(
     n_perturbations: int,
     perturbation_norm: float,
     seeds: list[int],
-) -> dict[str, np.ndarray]:
+    variants: list[tuple[str, bool, float]] | None = None,
+) -> dict[tuple[str, str], np.ndarray]:
     """Measures input sensitivity and Jacobian conditioning vs depth.
 
     For each random input x we compute:
@@ -357,72 +404,113 @@ def run_conditioning_experiment(
         all directions and is expected to stay flat at the Kaiming scale,
         while the condition number grows ~exponentially: the average hides
         the ill-conditioning, the spectrum does not.
+
+    With variants, each row is (label, residual, branch_scale); for residual
+    networks the same measurements quantify how much the skip connections fix
+    the conditioning. The Jacobian is computed for the LAST hidden layer.
     """
-    metrics: dict[str, list[float]] = {
-        "empirical_sensitivity": [],
-        "sigma_max": [],
-        "sigma_min": [],
-        "condition_number": [],
-        "jacobian_frobenius": [],
+    variants = variants or [("plain", False, 1.0)]
+    metrics: dict[tuple, dict[str, list[float]]] = {
+        variant: {
+            "empirical_sensitivity": [],
+            "sigma_max": [],
+            "sigma_min": [],
+            "condition_number": [],
+            "jacobian_frobenius": [],
+        }
+        for variant in variants
     }
     for seed in seeds:
         torch.manual_seed(seed)
-        model = RandomMLP(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            n_layers=max(depth_grid),
-            weight_scale=weight_scale,
-            activation_name=activation_name,
-        ).to(dtype=torch.float64)
+        # Models with a fixed branch scale can be built once per seed; models
+        # with a depth-dependent scale (marked by negative sentinels) are
+        # rebuilt inside the depth loop.
+        static_models = {
+            variant: RandomMLP(
+                input_dim=input_dim,
+                hidden_dim=hidden_dim,
+                n_layers=max(depth_grid),
+                weight_scale=weight_scale,
+                activation_name=activation_name,
+                residual=residual,
+                branch_scale=branch_scale,
+            ).to(dtype=torch.float64)
+            for variant, residual, branch_scale in variants
+            if branch_scale > 0
+        }
 
-        def forward_n_layers(x: torch.Tensor, n_layers: int) -> torch.Tensor:
-            h = x
-            for layer in model.hidden_layers[:n_layers]:
-                h = layer(h)
-            return h
+        def get_model(variant: str, residual: bool, branch_scale: float, n_layers: int) -> RandomMLP:
+            if branch_scale > 0:
+                return static_models[variant]
+            resolved_scale = {  # negative sentinels: -1 -> 1/sqrt(L), -2 -> 1/L
+                -1.0: 1.0 / np.sqrt(n_layers),
+                -2.0: 1.0 / n_layers,
+            }[branch_scale]
+            torch.manual_seed(seed)
+            return RandomMLP(
+                input_dim=input_dim,
+                hidden_dim=hidden_dim,
+                n_layers=n_layers,
+                weight_scale=weight_scale,
+                activation_name=activation_name,
+                residual=residual,
+                branch_scale=resolved_scale,
+            ).to(dtype=torch.float64)
 
         generator = torch.Generator().manual_seed(seed + 20_000)
         xs = torch.randn(n_inputs, input_dim, dtype=torch.float64, generator=generator)
         for n_layers in depth_grid:
-            sensitivities: list[float] = []
-            sigma_max_list: list[float] = []
-            sigma_min_list: list[float] = []
-            frobenius_list: list[float] = []
-            for x in xs:
-                x = x.detach().requires_grad_(True)
-                # Empirical perturbation sensitivity (finite differences).
-                for _ in range(n_perturbations):
-                    dx = torch.randn(input_dim, dtype=torch.float64, generator=generator)
-                    dx = dx * (perturbation_norm / dx.norm())
-                    dy = forward_n_layers(x + dx, n_layers) - forward_n_layers(x, n_layers)
-                    sensitivities.append((dy.norm() / perturbation_norm).item())
-                # Exact Jacobian spectrum.
-                jacobian = torch.autograd.functional.jacobian(
-                    lambda xx: forward_n_layers(xx, n_layers), x
+            for variant, residual, branch_scale in variants:
+                model = get_model(variant, residual, branch_scale, n_layers)
+
+                def forward_n_layers(xx: torch.Tensor, model=model, n_layers=n_layers) -> torch.Tensor:
+                    return model.forward_hidden(xx, n_layers=n_layers)
+
+                sensitivities: list[float] = []
+                sigma_max_list: list[float] = []
+                sigma_min_list: list[float] = []
+                frobenius_list: list[float] = []
+                for x in xs:
+                    x = x.detach().requires_grad_(True)
+                    # Empirical perturbation sensitivity (finite differences).
+                    for _ in range(n_perturbations):
+                        dx = torch.randn(input_dim, dtype=torch.float64, generator=generator)
+                        dx = dx * (perturbation_norm / dx.norm())
+                        dy = forward_n_layers(x + dx) - forward_n_layers(x)
+                        sensitivities.append((dy.norm() / perturbation_norm).item())
+                    # Exact Jacobian spectrum.
+                    jacobian = torch.autograd.functional.jacobian(forward_n_layers, x)
+                    singular_values = torch.linalg.svdvals(jacobian)
+                    sigma_max_list.append(singular_values[0].item())
+                    sigma_min_list.append(singular_values[-1].item())
+                    frobenius_list.append(jacobian.norm().item())
+                variant_metrics = metrics[(variant, residual, branch_scale)]
+                variant_metrics["empirical_sensitivity"].append(np.mean(sensitivities))
+                variant_metrics["sigma_max"].append(np.mean(sigma_max_list))
+                variant_metrics["sigma_min"].append(np.mean(sigma_min_list))
+                variant_metrics["condition_number"].append(
+                    np.mean(np.asarray(sigma_max_list) / np.asarray(sigma_min_list))
                 )
-                singular_values = torch.linalg.svdvals(jacobian)
-                sigma_max_list.append(singular_values[0].item())
-                sigma_min_list.append(singular_values[-1].item())
-                frobenius_list.append(jacobian.norm().item())
-            metrics["empirical_sensitivity"].append(np.mean(sensitivities))
-            metrics["sigma_max"].append(np.mean(sigma_max_list))
-            metrics["sigma_min"].append(np.mean(sigma_min_list))
-            metrics["condition_number"].append(
-                np.mean(np.asarray(sigma_max_list) / np.asarray(sigma_min_list))
-            )
-            metrics["jacobian_frobenius"].append(np.mean(frobenius_list))
+                variant_metrics["jacobian_frobenius"].append(np.mean(frobenius_list))
 
     # Reorganize into per-metric arrays of shape (n_seeds, len(depth_grid)).
     n_depths = len(depth_grid)
     result = {
-        key: np.asarray(values).reshape(len(seeds), n_depths).mean(axis=0)
-        for key, values in metrics.items()
+        (label, key): np.asarray(values).reshape(len(seeds), n_depths).mean(axis=0)
+        for (label, _, _), variant_metrics in zip(variants, metrics.values())
+        for key, values in variant_metrics.items()
     }
     return result
 
 
 def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     sweep_cfg = cfg.conditioning
+    variants = [
+        ("plain", False, 1.0),
+        ("residual (branch x1)", True, 1.0),
+        ("residual (branch x1/sqrt(L))", True, -1.0),  # -1 marks 1/sqrt(L)
+        ("residual (branch x1/L)", True, -2.0),  # -2 marks 1/L
+    ]
     result = run_conditioning_experiment(
         input_dim=cfg.input_dim,
         hidden_dim=cfg.hidden_dim,
@@ -433,45 +521,53 @@ def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
         n_perturbations=sweep_cfg.n_perturbations,
         perturbation_norm=sweep_cfg.perturbation_norm,
         seeds=seeds,
+        variants=variants,
     )
     depth_grid = np.asarray(cfg.depth_grid)
+    # Resolve the dynamic branch scales (1/sqrt(L) and 1/L per depth).
+    variant_labels = {
+        "plain": "plain",
+        "residual (branch x1)": "residual, branch $\\times 1$",
+        "residual (branch x1/sqrt(L))": "residual, branch $\\times 1/\\sqrt{L}$",
+        "residual (branch x1/L)": "residual, branch $\\times 1/L$",
+    }
+    colors = {
+        "plain": "tab:blue",
+        "residual (branch x1)": "tab:red",
+        "residual (branch x1/sqrt(L))": "tab:green",
+        "residual (branch x1/L)": "tab:purple",
+    }
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-    # Left: empirical sensitivity (mean over random inputs and directions).
-    axes[0].loglog(
-        depth_grid,
-        result["empirical_sensitivity"],
-        "o-",
-        color="tab:blue",
-        label=r"empirical $\|dy/dx\|$ (random $dx$)",
-    )
-    axes[0].loglog(
-        depth_grid,
-        result["jacobian_frobenius"] / np.sqrt(cfg.input_dim),
-        "s--",
-        color="tab:orange",
-        label=r"$\|J\|_F / \sqrt{d}$ (RMS over directions)",
-    )
+    for variant_label, residual, branch_scale in variants:
+        key = variant_label
+        color = colors[key]
+        label = variant_labels[key]
+        empirical = result[(key, "empirical_sensitivity")]
+        condition = result[(key, "condition_number")]
+        axes[0].loglog(
+            depth_grid,
+            empirical,
+            "o-",
+            color=color,
+            label=rf"empirical $\|dy/dx\|$: {label}",
+        )
+        axes[1].loglog(
+            depth_grid,
+            condition,
+            "o-",
+            color=color,
+            label=rf"$\sigma_{{\max}}/\sigma_{{\min}}$: {label}",
+        )
     axes[0].set_xlabel("Number of layers $L$", fontsize=12)
     axes[0].set_ylabel(r"sensitivity of $h_L$ to the input", fontsize=12)
-    axes[0].set_ylim(0.5, 2.0)
     axes[0].set_title("Average sensitivity", fontsize=13)
     axes[0].grid(True, which="both", alpha=0.3)
-    axes[0].legend(fontsize=9)
-    # Right: Jacobian spectrum spread.
-    axes[1].loglog(depth_grid, result["sigma_max"], "o-", color="tab:red", label=r"$\sigma_{\max}$")
-    axes[1].loglog(depth_grid, result["sigma_min"], "o-", color="tab:green", label=r"$\sigma_{\min}$")
-    axes[1].loglog(
-        depth_grid,
-        result["condition_number"],
-        "o-",
-        color="tab:purple",
-        label=r"$\sigma_{\max} / \sigma_{\min}$",
-    )
+    axes[0].legend(fontsize=8)
     axes[1].set_xlabel("Number of layers $L$", fontsize=12)
-    axes[1].set_ylabel("input-Jacobian singular values", fontsize=12)
+    axes[1].set_ylabel("input-Jacobian condition number", fontsize=12)
     axes[1].set_title("Jacobian conditioning", fontsize=13)
     axes[1].grid(True, which="both", alpha=0.3)
-    axes[1].legend(fontsize=9)
+    axes[1].legend(fontsize=8)
     fig.suptitle(
         f"({cfg.activation}, $\\sigma = {cfg.weight_scale:.3f}$, "
         f"$||dx|| = {sweep_cfg.perturbation_norm:.0e}$, {sweep_cfg.n_inputs} inputs)",
@@ -481,13 +577,15 @@ def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     fig.savefig(f"hidden_norms_conditioning_{cfg.activation}.svg")
     fig.savefig(f"hidden_norms_conditioning_{cfg.activation}.png", dpi=150)
     plt.close(fig)
-    for i, n_layers in enumerate(depth_grid):
-        print(
-            f"L = {n_layers:3d}: empirical = {result['empirical_sensitivity'][i]:.3f}, "
-            f"sigma_max = {result['sigma_max'][i]:.3e}, "
-            f"sigma_min = {result['sigma_min'][i]:.3e}, "
-            f"cond = {result['condition_number'][i]:.3e}"
-        )
+    for variant_label, _, _ in variants:
+        print(f"Variant: {variant_label}")
+        for i, n_layers in enumerate(depth_grid):
+            print(
+                f"  L = {n_layers:3d}: empirical = {result[(variant_label, 'empirical_sensitivity')][i]:.3f}, "
+                f"sigma_max = {result[(variant_label, 'sigma_max')][i]:.3e}, "
+                f"sigma_min = {result[(variant_label, 'sigma_min')][i]:.3e}, "
+                f"cond = {result[(variant_label, 'condition_number')][i]:.3e}"
+            )
 
 
 def main(cfg: DictConfig) -> None:
