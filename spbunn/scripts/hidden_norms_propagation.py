@@ -391,7 +391,7 @@ def run_conditioning_experiment(
     n_perturbations: int,
     perturbation_norm: float,
     seeds: list[int],
-    variants: list[tuple[str, bool, float]] | None = None,
+    variants: list[tuple[str, bool, float, float | None]] | None = None,
 ) -> dict[tuple[str, str], np.ndarray]:
     """Measures input sensitivity and Jacobian conditioning vs depth.
 
@@ -405,11 +405,13 @@ def run_conditioning_experiment(
         while the condition number grows ~exponentially: the average hides
         the ill-conditioning, the spectrum does not.
 
-    With variants, each row is (label, residual, branch_scale); for residual
-    networks the same measurements quantify how much the skip connections fix
-    the conditioning. The Jacobian is computed for the LAST hidden layer.
+    With variants, each row is (label, residual, branch_scale, weight_scale);
+    weight_scale None means the default (Kaiming) scale passed to this
+    function. For residual networks the same measurements quantify how much
+    the skip connections fix the conditioning. The Jacobian is computed for
+    the LAST hidden layer.
     """
-    variants = variants or [("plain", False, 1.0)]
+    variants = variants or [("plain", False, 1.0, None)]
     metrics: dict[tuple, dict[str, list[float]]] = {
         variant: {
             "empirical_sensitivity": [],
@@ -430,16 +432,16 @@ def run_conditioning_experiment(
                 input_dim=input_dim,
                 hidden_dim=hidden_dim,
                 n_layers=max(depth_grid),
-                weight_scale=weight_scale,
+                weight_scale=variant_weight_scale if variant_weight_scale is not None else weight_scale,
                 activation_name=activation_name,
                 residual=residual,
                 branch_scale=branch_scale,
             ).to(dtype=torch.float64)
-            for variant, residual, branch_scale in variants
+            for variant, residual, branch_scale, variant_weight_scale in variants
             if branch_scale > 0
         }
 
-        def get_model(variant: str, residual: bool, branch_scale: float, n_layers: int) -> RandomMLP:
+        def get_model(variant: tuple, residual: bool, branch_scale: float, variant_weight_scale, n_layers: int) -> RandomMLP:
             if branch_scale > 0:
                 return static_models[variant]
             resolved_scale = {  # negative sentinels: -1 -> 1/sqrt(L), -2 -> 1/L
@@ -451,7 +453,7 @@ def run_conditioning_experiment(
                 input_dim=input_dim,
                 hidden_dim=hidden_dim,
                 n_layers=n_layers,
-                weight_scale=weight_scale,
+                weight_scale=variant_weight_scale if variant_weight_scale is not None else weight_scale,
                 activation_name=activation_name,
                 residual=residual,
                 branch_scale=resolved_scale,
@@ -460,8 +462,8 @@ def run_conditioning_experiment(
         generator = torch.Generator().manual_seed(seed + 20_000)
         xs = torch.randn(n_inputs, input_dim, dtype=torch.float64, generator=generator)
         for n_layers in depth_grid:
-            for variant, residual, branch_scale in variants:
-                model = get_model(variant, residual, branch_scale, n_layers)
+            for variant, residual, branch_scale, variant_weight_scale in variants:
+                model = get_model(variant, residual, branch_scale, variant_weight_scale, n_layers)
 
                 def forward_n_layers(xx: torch.Tensor, model=model, n_layers=n_layers) -> torch.Tensor:
                     return model.forward_hidden(xx, n_layers=n_layers)
@@ -484,7 +486,7 @@ def run_conditioning_experiment(
                     sigma_max_list.append(singular_values[0].item())
                     sigma_min_list.append(singular_values[-1].item())
                     frobenius_list.append(jacobian.norm().item())
-                variant_metrics = metrics[(variant, residual, branch_scale)]
+                variant_metrics = metrics[(variant, residual, branch_scale, variant_weight_scale)]
                 variant_metrics["empirical_sensitivity"].append(np.mean(sensitivities))
                 variant_metrics["sigma_max"].append(np.mean(sigma_max_list))
                 variant_metrics["sigma_min"].append(np.mean(sigma_min_list))
@@ -497,7 +499,7 @@ def run_conditioning_experiment(
     n_depths = len(depth_grid)
     result = {
         (label, key): np.asarray(values).reshape(len(seeds), n_depths).mean(axis=0)
-        for (label, _, _), variant_metrics in zip(variants, metrics.values())
+        for (label, _, _, _), variant_metrics in zip(variants, metrics.values())
         for key, values in variant_metrics.items()
     }
     return result
@@ -505,13 +507,33 @@ def run_conditioning_experiment(
 
 def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     sweep_cfg = cfg.conditioning
-    variants = [
-        ("plain", False, 1.0),
-        ("residual (branch x1)", True, 1.0),
-        ("residual (branch x1/sqrt(L))", True, -1.0),  # -1 marks 1/sqrt(L)
-        ("residual (branch x1/L)", True, -2.0),  # -2 marks 1/L
+
+    # Part 1: plain MLP, two initialization scales (unscaled N(0,1) and Kaiming).
+    plain_variants = [
+        ("1.0 (unscaled)", False, 1.0, 1.0),
+        ("Kaiming sqrt(2/H)", False, 1.0, cfg.weight_scale),
     ]
-    result = run_conditioning_experiment(
+    plain_result = run_conditioning_experiment(
+        input_dim=cfg.input_dim,
+        hidden_dim=cfg.hidden_dim,
+        activation_name=cfg.activation,
+        weight_scale=cfg.weight_scale,  # unused for plain variants; see below
+        depth_grid=list(cfg.depth_grid),
+        n_inputs=sweep_cfg.n_inputs,
+        n_perturbations=sweep_cfg.n_perturbations,
+        perturbation_norm=sweep_cfg.perturbation_norm,
+        seeds=seeds,
+        variants=plain_variants,
+    )
+
+    # Part 2: residual variants at the Kaiming scale.
+    residual_variants: list[tuple[str, bool, float, float | None]] = [
+        ("plain", False, 1.0, None),
+        ("residual (branch x1)", True, 1.0, None),
+        ("residual (branch x1/sqrt(L))", True, -1.0, None),  # -1 marks 1/sqrt(L)
+        ("residual (branch x1/L)", True, -2.0, None),  # -2 marks 1/L
+    ]
+    residual_result = run_conditioning_experiment(
         input_dim=cfg.input_dim,
         hidden_dim=cfg.hidden_dim,
         activation_name=cfg.activation,
@@ -521,10 +543,57 @@ def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
         n_perturbations=sweep_cfg.n_perturbations,
         perturbation_norm=sweep_cfg.perturbation_norm,
         seeds=seeds,
-        variants=variants,
+        variants=residual_variants,
     )
+    plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, residual_variants)
+
+
+def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, residual_variants) -> None:
     depth_grid = np.asarray(cfg.depth_grid)
-    # Resolve the dynamic branch scales (1/sqrt(L) and 1/L per depth).
+    # Figure 1 (part 1): plain MLP, two init scales.
+    # The plain variants carry their own weight scale in the label; rebuild the
+    # experiment data: "1.0 (unscaled)" was run with cfg.weight_scale, so rerun
+    # it properly instead of mislabeling.
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    for key, color in [
+        ("Kaiming sqrt(2/H)", "tab:green"),
+        ("1.0 (unscaled)", "tab:red"),
+    ]:
+        axes[0].loglog(
+            depth_grid,
+            plain_result[(key, "empirical_sensitivity")],
+            "o-",
+            color=color,
+            label=rf"empirical $\|dy/dx\|$: {key}",
+        )
+        axes[1].loglog(
+            depth_grid,
+            plain_result[(key, "condition_number")],
+            "o-",
+            color=color,
+            label=rf"$\sigma_{{\max}}/\sigma_{{\min}}$: {key}",
+        )
+    axes[0].set_xlabel("Number of layers $L$", fontsize=12)
+    axes[0].set_ylabel(r"sensitivity of $h_L$ to the input", fontsize=12)
+    axes[0].set_title("Average sensitivity", fontsize=13)
+    axes[0].grid(True, which="both", alpha=0.3)
+    axes[0].legend(fontsize=8)
+    axes[1].set_xlabel("Number of layers $L$", fontsize=12)
+    axes[1].set_ylabel("input-Jacobian condition number", fontsize=12)
+    axes[1].set_title("Jacobian conditioning", fontsize=13)
+    axes[1].grid(True, which="both", alpha=0.3)
+    axes[1].legend(fontsize=8)
+    fig.suptitle(
+        f"Plain MLP ({cfg.activation}), {sweep_cfg.n_inputs} inputs, "
+        f"$||dx|| = {sweep_cfg.perturbation_norm:.0e}$",
+        fontsize=12,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.savefig(f"hidden_norms_conditioning_init_{cfg.activation}.svg")
+    fig.savefig(f"hidden_norms_conditioning_init_{cfg.activation}.png", dpi=150)
+    plt.close(fig)
+
+    # Figure 2 (part 2): residual variants at the Kaiming scale.
     variant_labels = {
         "plain": "plain",
         "residual (branch x1)": "residual, branch $\\times 1$",
@@ -538,22 +607,20 @@ def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
         "residual (branch x1/L)": "tab:purple",
     }
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-    for variant_label, residual, branch_scale in variants:
+    for variant_label, residual, branch_scale, variant_weight_scale in residual_variants:
         key = variant_label
         color = colors[key]
         label = variant_labels[key]
-        empirical = result[(key, "empirical_sensitivity")]
-        condition = result[(key, "condition_number")]
         axes[0].loglog(
             depth_grid,
-            empirical,
+            residual_result[(key, "empirical_sensitivity")],
             "o-",
             color=color,
             label=rf"empirical $\|dy/dx\|$: {label}",
         )
         axes[1].loglog(
             depth_grid,
-            condition,
+            residual_result[(key, "condition_number")],
             "o-",
             color=color,
             label=rf"$\sigma_{{\max}}/\sigma_{{\min}}$: {label}",
@@ -569,7 +636,7 @@ def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     axes[1].grid(True, which="both", alpha=0.3)
     axes[1].legend(fontsize=8)
     fig.suptitle(
-        f"({cfg.activation}, $\\sigma = {cfg.weight_scale:.3f}$, "
+        f"({cfg.activation}, $\\sigma = {cfg.weight_scale:.3f}$ (Kaiming), "
         f"$||dx|| = {sweep_cfg.perturbation_norm:.0e}$, {sweep_cfg.n_inputs} inputs)",
         fontsize=12,
     )
@@ -577,14 +644,25 @@ def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     fig.savefig(f"hidden_norms_conditioning_{cfg.activation}.svg")
     fig.savefig(f"hidden_norms_conditioning_{cfg.activation}.png", dpi=150)
     plt.close(fig)
-    for variant_label, _, _ in variants:
+    print("Part 1 (plain MLP, two init scales):")
+    for key in ("Kaiming sqrt(2/H)", "1.0 (unscaled)"):
+        print(f"Variant: {key}")
+        for i, n_layers in enumerate(depth_grid):
+            print(
+                f"  L = {n_layers:3d}: empirical = {plain_result[(key, 'empirical_sensitivity')][i]:.3f}, "
+                f"sigma_max = {plain_result[(key, 'sigma_max')][i]:.3e}, "
+                f"sigma_min = {plain_result[(key, 'sigma_min')][i]:.3e}, "
+                f"cond = {plain_result[(key, 'condition_number')][i]:.3e}"
+            )
+    print("Part 2 (residual variants, Kaiming init):")
+    for variant_label, _, _, _ in residual_variants:
         print(f"Variant: {variant_label}")
         for i, n_layers in enumerate(depth_grid):
             print(
-                f"  L = {n_layers:3d}: empirical = {result[(variant_label, 'empirical_sensitivity')][i]:.3f}, "
-                f"sigma_max = {result[(variant_label, 'sigma_max')][i]:.3e}, "
-                f"sigma_min = {result[(variant_label, 'sigma_min')][i]:.3e}, "
-                f"cond = {result[(variant_label, 'condition_number')][i]:.3e}"
+                f"  L = {n_layers:3d}: empirical = {residual_result[(variant_label, 'empirical_sensitivity')][i]:.3f}, "
+                f"sigma_max = {residual_result[(variant_label, 'sigma_max')][i]:.3e}, "
+                f"sigma_min = {residual_result[(variant_label, 'sigma_min')][i]:.3e}, "
+                f"cond = {residual_result[(variant_label, 'condition_number')][i]:.3e}"
             )
 
 

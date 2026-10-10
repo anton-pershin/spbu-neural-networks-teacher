@@ -52,54 +52,31 @@ decay/explode regimes the theory matches over many orders of magnitude regardles
 
 Defaults below: $H = 256$, $d = 16$, batch 256, 5 seeds, ReLU.
 
-## 2. Experiment 1: forward and backward norms vs depth (figure `hidden_norms_depth_relu`)
+## 2. Experiment 1: forward and backward norms vs the initialization scale
 
-![Forward and backward norms vs layer index, varied depth](notes/hidden_norms_depth_relu.png)
+![Forward and backward norms vs layer index, Kaiming vs unscaled init](notes/hidden_norms_init_relu.png)
 
-Fix $\sigma = \sqrt{2/H}$ (critical) and vary $L \in \{1, 2, 4, 8, 16, 32, 64\}$.
+Fix $L = 32$ and compare two initializations (figure above):
 
-**Q1 — how does $\|h_l\|_2$ depend on the layer location and total depth?**
-It does not — that is the point. Every curve is flat at $\approx \sqrt{d}$–$6$ across all
-$l$ and all $L$: with the critical scale the multiplicative process is neutral, so depth
-alone neither amplifies nor attenuates the signal. Depth only decides *how far* the
-(neutrally stable) process runs.
+- **Kaiming, $\sigma = \sqrt{2/H}$** (per-layer factor $q = H\sigma^2/2 = 1$, critical):
+  both curves stay $O(1)$ for all 32 layers — the network sits at the edge of chaos.
+- **Unscaled, $\sigma = 1$, i.e. $W_{ij} \sim \mathcal{N}(0, 1)$** ($q = H\sigma^2/2 = 128$):
+  both curves explode exponentially — $\|h_l\|$ reaches $\sim 10^{34}$ by layer 32, and the
+  gradients explode correspondingly in the backward pass.
 
-**Q2 — how does $\|\partial\mathcal{L}/\partial h_l\|_2$ depend on them?**
-The mirror image, and quantitatively much more violent in relative terms: the gradient at
-layer $l$ is a product of $L - l$ Jacobians, so it compounds over the *remaining* depth.
-At criticality it stays $O(1)$, but any deviation of the per-layer factor from $1$ is
-amplified exponentially in $L - l$ — this asymmetry is why gradients are so much more
-fragile than activations.
+The dashed zero-mean theory lines track the measurements over more than 30 orders of
+magnitude. The two regimes bracket the teaching point: everything is decided by whether
+the per-layer factor $q$ is below, at, or above $1$, and the critical choice is exactly
+Kaiming's $\sigma^2 = 2/H$.
 
-**Q3 — dependence on the initialization distribution (figure `hidden_norms_init_relu`).**
+One subtlety visible in the backward panel: at $l = 1$ the gradient contracts from $H$
+dimensions into the $d$-dimensional input space, replacing the last factor by
+$\sigma^2 d / 2$ — hence the characteristic dip of the first point of the theory line.
 
-![Forward and backward norms vs layer index, varied init scale](notes/hidden_norms_init_relu.png)
+## 3. Experiment 2: conditioning of the input–output map vs depth
 
-Fix $L = 32$ and vary $\sigma$ around the critical value. With the per-layer factor
-$q = H\sigma^2/2$:
-
-| $\sigma$ | $q$ | forward $\|h_l\|$ | backward $\|d\mathcal{L}/dh_l\|$ |
-|---|---|---|---|
-| $0.5/\sqrt{H}$ | $0.125$ | decays to $\sim 10^{-13}$ | vanishes to $\sim 10^{-11}$ |
-| $1/\sqrt{H}$ | $0.5$ | slow decay | slow decay |
-| $\sqrt{2/H}$ | $1$ (critical) | flat | flat |
-| $2/\sqrt{H}$ | $2$ | grows to $\sim 10^{6}$ | explodes to $\sim 10^{5}$ |
-| $1$ (unscaled) | $128$ | explodes to $\sim 10^{34}$ | explodes correspondingly |
-
-Both curves are exponential in $l$ with rate $q$ (forward) and rate determined by the
-backward factor (backward); the dashed zero-mean theory lines track the measurements over
-more than 30 orders of magnitude. One subtlety visible in the backward panel: at $l = 1$
-the gradient contracts from $H$ dimensions into the $d$-dimensional input space, replacing
-the last factor by $\sigma^2 d / 2$ — hence the characteristic dip of the first point.
-
-## 3. Experiment 2: conditioning vs depth (figure `hidden_norms_conditioning_relu`)
-
-![Empirical sensitivity and Jacobian condition number vs depth, plain and residual variants](notes/hidden_norms_conditioning_relu.png)
-
-**Claim:** even at the critical scale, depth makes the input–output map increasingly
-*ill-conditioned* — not in the average, but in the spectrum.
-
-**Design.** For each of 16 random inputs $x$ we compute two things:
+Here we ask not *how large* the signal is, but *how well-conditioned* the map from input
+to the last hidden layer is. **Design.** For each of 16 random inputs $x$ we compute:
 
 1. *Empirical sensitivity* (the finite-difference probe): sample random directions
    $\|dx\| = 10^{-3}$ and measure
@@ -110,25 +87,36 @@ the last factor by $\sigma^2 d / 2$ — hence the characteristic dip of the firs
    the condition number $\kappa = \sigma_{\max}/\sigma_{\min}$ and the Frobenius norm
    $\|J\|_F$ (which equals the RMS sensitivity over all directions).
 
-**Result (plain network, blue curves).** The average sensitivity is a red herring:
-$\|dy/dx\|$ and $\|J\|_F/\sqrt{d}$ both stay $\approx 1$ for all $L$ — exactly the
-criticality of Experiment 1. But the *spectrum spreads exponentially*:
+### 3.1 Plain MLP, Kaiming vs unscaled initialization
 
-$$\sigma_{\max}: 1.3 \to 3.2, \qquad 
-\sigma_{\min}: 0.67 \to 3.2\times 10^{-3}, \qquad 
-\kappa: 2 \to 1.2 \times 10^{3} \quad (L = 1 \to 64).$$
+![Empirical sensitivity and Jacobian condition number vs depth, plain MLP, two init scales](notes/hidden_norms_conditioning_init_relu.png)
 
-A product of many random matrices has singular values spanning an exponentially wide
-range even when the typical gain is $1$. The map becomes hypersensitive to a few input
-directions and nearly blind to most — this anisotropy (not the average norm) is the
-mechanism behind shattered gradients. **Ill-conditioning hides from averages and shows
-up in the spectrum.**
+Two cases, plain network (figure above):
 
-## 4. Experiment 3: do residual connections fix it?
+- **Kaiming (green).** The average sensitivity is flat at $\approx 1$ for all $L$ — the
+  same criticality as in Experiment 1. But the spectrum spreads exponentially:
+  $$\sigma_{\max}: 1.3 \to 3.2, \qquad 
+  \sigma_{\min}: 0.67 \to 3.1\times 10^{-3}, \qquad 
+  \kappa: 2 \to 9.9 \times 10^{2} \quad (L = 1 \to 64).$$
+- **Unscaled, $\sigma = 1$ (red).** Sensitivity explodes astronomically
+  ($\sim 10^{68}$ by $L = 64$ — each layer multiplies the gain by $\approx 11$), while
+  its condition number grows almost exactly like the Kaiming case
+  ($2 \to 1.2\times 10^3$): the condition number is a *ratio* of singular values and is
+  largely invariant to the overall gain.
+
+**The teaching point of the green curves:** a product of many random matrices has
+singular values spanning an exponentially wide range even when the typical gain is $1$.
+The map becomes hypersensitive to a few input directions and nearly blind to most — this
+anisotropy (not the average norm) is the mechanism behind shattered gradients.
+**Ill-conditioning hides from averages and shows up in the spectrum.**
+
+### 3.2 Do residual connections fix it?
+
+![Empirical sensitivity and Jacobian condition number vs depth, residual variants at Kaiming init](notes/hidden_norms_conditioning_relu.png)
 
 We add skip connections, $h_l = h_{l-1} + s\cdot \mathrm{ReLU}(W_l h_{l-1})$ (the first,
-$d \to H$ block stays plain, as the ResNet stem does), and rerun the conditioning
-experiment for three choices of the branch scale $s$:
+$d \to H$ block stays plain, as the ResNet stem does), and rerun the experiment at the
+Kaiming scale for three choices of the branch scale $s$ (figure above, all four curves):
 
 | variant | sensitivity $\|dy/dx\|$ ($L=1 \to 64$) | $\kappa$ ($L=1 \to 64$) | verdict |
 |---|---|---|---|
@@ -155,16 +143,16 @@ $1 + s^2 H\sigma^2/2$. So:
 so that blocks are perturbative ($s \propto 1/L$); naive skip connections at the Kaiming
 scale make things worse.
 
-## 5. Reproducing
+## 4. Reproducing
 
 All experiment parameters live in `config/config_hidden_norms.yaml`
 (`input_dim`, `hidden_dim`, `depth_grid`, `weight_scale`, init-sweep scales,
-conditioning counts; `experiments:` selects which of the three to run). The conditioning
-experiment is the slow one (~20 min: $4$ variants $\times$ 7 depths $\times$ 5 seeds of
-full-Jacobian SVDs).
+conditioning counts; `experiments:` selects which of the experiments to run). The
+conditioning experiment is the slow one (~20 min: $6$ variants $\times$ 7 depths $\times$
+5 seeds of full-Jacobian SVDs).
 
 Figures are saved as `.svg` (repo convention) and `.png` (messenger-friendly) in the
-working directory.
+working directory; the PNG copies embedded here live in `notes/`.
 
 ## References
 
