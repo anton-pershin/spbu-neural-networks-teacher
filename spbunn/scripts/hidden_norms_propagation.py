@@ -209,48 +209,16 @@ def run_averaged_experiment(
     return result
 
 
-def add_theory_lines(
-    ax,
-    n_layers: int,
-    weight_scale: float,
-    input_dim: int,
-    hidden_dim: int,
-    mode: str,
-    with_label: bool = True,
-) -> None:
-    """Dashed theoretical predictions for the mean-squared norms (ReLU)."""
-    layer_indices = np.arange(1, n_layers + 1)
-    if mode == "forward":
-        # E ||h_l||^2 = d * (N sigma^2 / 2)^l for ReLU with zero biases.
-        theory = input_dim * (weight_scale**2 * hidden_dim / 2.0) ** layer_indices
-        label = r"$\sqrt{d (N\sigma^2/2)^l}$" if with_label else None
-    else:
-        # E ||dL/dh_l||^2 = N * (sigma^2 (N + 1) / 2)^(L - l + 1) for l >= 2:
-        # the backward signal starts at E||g||^2 = N (isotropic output
-        # gradient) and is multiplied by the expected squared Frobenius norm
-        # of each layer Jacobian as it travels towards earlier layers. The
-        # FIRST layer (l = 1) instead contracts into the d-dimensional input
-        # space, replacing its last factor by sigma^2 * d / 2.
-        theory = hidden_dim * (weight_scale**2 * (hidden_dim + 1) / 2.0) ** (
-            n_layers - layer_indices + 1
-        )
-        theory[0] = (
-            hidden_dim
-            * (weight_scale**2 * (hidden_dim + 1) / 2.0) ** (n_layers - 1)
-            * (weight_scale**2 * input_dim / 2.0)
-        )
-        label = r"$\sqrt{N (\sigma^2 (N+1)/2)^{L-l+1}}$" if with_label else None
-    ax.plot(
-        layer_indices,
-        np.sqrt(theory),
-        "--",
-        marker=".",
-        markersize=4,
-        color="grey",
-        linewidth=1.2,
-        alpha=0.8,
-        label=label,
-    )
+LABEL_FONTSIZE = 18
+TICK_FONTSIZE = 14
+
+
+def style_axis(ax) -> None:
+    """Shared cosmetic styling: 18pt labels/legend, 14pt ticks."""
+    ax.set_xlabel(ax.get_xlabel(), fontsize=LABEL_FONTSIZE)
+    ax.set_ylabel(ax.get_ylabel(), fontsize=LABEL_FONTSIZE)
+    ax.tick_params(labelsize=TICK_FONTSIZE)
+    ax.legend(fontsize=LABEL_FONTSIZE)
 
 
 def plot_norm_curves(
@@ -258,36 +226,33 @@ def plot_norm_curves(
     curves: dict,
     norm_key: str,
     ylabel: str,
-    with_theory: bool,
     input_dim: int,
     hidden_dim: int,
 ) -> None:
     """curves: mapping of any key -> {label, weight_scale, norms}."""
     for i, (key, entry) in enumerate(curves.items()):
         norms = entry["norms"]
-        weight_scale = entry["weight_scale"]
         n_layers = len(norms[norm_key + "_mean"])
         xs = np.arange(1, n_layers + 1)
         mean = norms[norm_key + "_mean"]
         std = norms[norm_key + "_std"]
         color = f"C{i}"
-        ax.plot(xs, mean, "-o", markersize=3, linewidth=1.5, color=color, label=entry["label"])
+        ax.plot(
+            xs,
+            mean,
+            "-o",
+            markersize=6,
+            linewidth=2.5,
+            color=color,
+            label=entry["label"],
+        )
         ax.fill_between(xs, mean - std, mean + std, color=color, alpha=0.2)
-        if with_theory and norm_key in ("hidden_pre_norm", "grad_input_norm"):
-            add_theory_lines(
-                ax=ax,
-                n_layers=n_layers,
-                weight_scale=weight_scale,
-                input_dim=input_dim,
-                hidden_dim=hidden_dim,
-                mode="forward" if norm_key == "hidden_pre_norm" else "backward",
-                with_label=(i == 0),
-            )
-    ax.set_xlabel("Layer index $l$", fontsize=12)
-    ax.set_ylabel(ylabel, fontsize=12)
+    ax.set_xlabel("Layer index $l$", fontsize=LABEL_FONTSIZE)
+    ax.set_ylabel(ylabel, fontsize=LABEL_FONTSIZE)
     ax.set_yscale("log")
     ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=9)
+    ax.legend(fontsize=LABEL_FONTSIZE)
+    ax.tick_params(labelsize=TICK_FONTSIZE)
 
 
 def plot_figure(
@@ -297,13 +262,13 @@ def plot_figure(
     hidden_dim: int,
     with_theory: bool,
 ) -> None:
+    del with_theory  # theory lines are no longer plotted
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
     plot_norm_curves(
         ax=axes[0],
         curves=curves,
         norm_key="hidden_pre_norm",
-        ylabel=r"$\|h_l\|_2$ (batch mean)",
-        with_theory=with_theory,
+        ylabel=r"$\|\xi_l\|_2$ (batch mean)",
         input_dim=input_dim,
         hidden_dim=hidden_dim,
     )
@@ -311,8 +276,7 @@ def plot_figure(
         ax=axes[1],
         curves=curves,
         norm_key="grad_input_norm",
-        ylabel=r"$\|dL/dh_l\|_2$ (batch mean)",
-        with_theory=with_theory,
+        ylabel=r"$\|dL/d\xi_l\|_2$ (batch mean)",
         input_dim=input_dim,
         hidden_dim=hidden_dim,
     )
@@ -322,10 +286,33 @@ def plot_figure(
     plt.close(fig)
 
 
+def plot_single_norm_figure(
+    curves: dict,
+    norm_key: str,
+    ylabel: str,
+    xlabel: str,
+    filename_base: str,
+) -> None:
+    """One curve set per figure: a single-panel norm plot."""
+    fig, ax = plt.subplots(figsize=(7, 5))
+    plot_norm_curves(
+        ax=ax,
+        curves=curves,
+        norm_key=norm_key,
+        ylabel=ylabel,
+        input_dim=0,
+        hidden_dim=0,
+    )
+    ax.set_xlabel(xlabel, fontsize=LABEL_FONTSIZE)
+    fig.tight_layout()
+    fig.savefig(f"{filename_base}.svg")
+    fig.savefig(f"{filename_base}.png", dpi=150)
+    plt.close(fig)
+
+
 def run_init_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     curves = {}
     n_layers = cfg.init_sweep.n_layers
-    hidden_dim = cfg.hidden_dim
     # Legend labels expressed via the variance; the Kaiming entry is symbolic.
     init_labels = {
         "sqrt(2/H)": r"$\sigma^2 = 2/N$ (Kaiming)",
@@ -345,12 +332,20 @@ def run_init_sweep(cfg: DictConfig, seeds: list[int]) -> None:
                 seeds=seeds,
             ),
         }
-    plot_figure(
+    # Two separate single-panel figures: forward and backward.
+    plot_single_norm_figure(
         curves=curves,
-        filename_base=f"hidden_norms_init_{cfg.activation}",
-        input_dim=cfg.input_dim,
-        hidden_dim=cfg.hidden_dim,
-        with_theory=cfg.with_theory,
+        norm_key="hidden_pre_norm",
+        ylabel=r"$\|\xi_l\|_2$ (batch mean)",
+        xlabel="Layer index $l$",
+        filename_base=f"hidden_norms_init_forward_{cfg.activation}",
+    )
+    plot_single_norm_figure(
+        curves=curves,
+        norm_key="grad_input_norm",
+        ylabel=r"$\|dL/d\xi_l\|_2$ (batch mean)",
+        xlabel="Layer index $l$",
+        filename_base=f"hidden_norms_init_backward_{cfg.activation}",
     )
 
 
@@ -523,75 +518,102 @@ def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
 
 def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, residual_variants) -> None:
     depth_grid = np.asarray(cfg.depth_grid)
+    xlabel = "Number of layers $M$"
     # Legend labels shared with the init-norms figure: expressed via the
     # variance, not the std.
     init_labels = {
         "Kaiming sqrt(2/H)": r"$\sigma^2 = 2/N$ (Kaiming)",
         "1.0 (unscaled)": r"$\sigma^2 = 1$",
     }
-    # Figure 1 (part 1): plain MLP, two init scales.
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    # Figure 1a (part 1): plain MLP, two init scales — sensitivity.
+    fig, ax = plt.subplots(figsize=(7, 5))
     for key in ("Kaiming sqrt(2/H)", "1.0 (unscaled)"):
-        axes[0].plot(
+        ax.semilogy(
             depth_grid,
             plain_result[(key, "empirical_sensitivity")],
             "o-",
+            markersize=6,
+            linewidth=2.5,
             label=init_labels[key],
         )
-        axes[1].semilogy(
+    ax.set_xlabel(xlabel, fontsize=LABEL_FONTSIZE)
+    ax.set_ylabel(r"sensitivity of $\xi_M$ to the input", fontsize=LABEL_FONTSIZE)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=LABEL_FONTSIZE)
+    ax.tick_params(labelsize=TICK_FONTSIZE)
+    fig.tight_layout()
+    fig.savefig(f"hidden_norms_conditioning_init_sensitivity_{cfg.activation}.svg")
+    fig.savefig(f"hidden_norms_conditioning_init_sensitivity_{cfg.activation}.png", dpi=150)
+    plt.close(fig)
+
+    # Figure 1b (part 1): plain MLP, two init scales — Jacobian conditioning.
+    fig, ax = plt.subplots(figsize=(7, 5))
+    for key in ("Kaiming sqrt(2/H)", "1.0 (unscaled)"):
+        ax.semilogy(
             depth_grid,
             plain_result[(key, "condition_number")],
             "o-",
+            markersize=6,
+            linewidth=2.5,
             label=init_labels[key],
         )
-    axes[0].set_xlabel("Number of layers $L$", fontsize=12)
-    axes[0].set_ylabel(r"sensitivity of $h_L$ to the input", fontsize=12)
-    axes[0].grid(True, alpha=0.3)
-    axes[0].legend(fontsize=9)
-    axes[1].set_xlabel("Number of layers $L$", fontsize=12)
-    axes[1].set_ylabel("input-Jacobian condition number", fontsize=12)
-    axes[1].grid(True, alpha=0.3)
-    axes[1].legend(fontsize=9)
+    ax.set_xlabel(xlabel, fontsize=LABEL_FONTSIZE)
+    ax.set_ylabel("input-Jacobian condition number", fontsize=LABEL_FONTSIZE)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=LABEL_FONTSIZE)
+    ax.tick_params(labelsize=TICK_FONTSIZE)
     fig.tight_layout()
-    fig.savefig(f"hidden_norms_conditioning_init_{cfg.activation}.svg")
-    fig.savefig(f"hidden_norms_conditioning_init_{cfg.activation}.png", dpi=150)
+    fig.savefig(f"hidden_norms_conditioning_init_jacobian_{cfg.activation}.svg")
+    fig.savefig(f"hidden_norms_conditioning_init_jacobian_{cfg.activation}.png", dpi=150)
     plt.close(fig)
 
-    # Figure 2 (part 2): residual variants at the Kaiming scale.
+    # Part 2: residual variants at the Kaiming scale — same two-panel layout.
     variant_labels = {
         "plain": "plain",
         "residual (branch x1)": "residual, branch $\\times 1$",
-        "residual (branch x1/sqrt(L))": "residual, branch $\\times 1/\\sqrt{L}$",
-        "residual (branch x1/L)": "residual, branch $\\times 1/L$",
+        "residual (branch x1/sqrt(L))": "residual, branch $\\times 1/\\sqrt{M}$",
+        "residual (branch x1/L)": "residual, branch $\\times 1/M$",
     }
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    fig, ax = plt.subplots(figsize=(7, 5))
     for i, (variant_label, _, _, _) in enumerate(residual_variants):
-        label = variant_labels[variant_label]
-        axes[0].semilogy(
+        ax.semilogy(
             depth_grid,
             residual_result[(variant_label, "empirical_sensitivity")],
             "o-",
+            markersize=6,
+            linewidth=2.5,
             color=f"C{i}",
-            label=label,
+            label=variant_labels[variant_label],
         )
-        axes[1].semilogy(
+    ax.set_xlabel(xlabel, fontsize=LABEL_FONTSIZE)
+    ax.set_ylabel(r"sensitivity of $\xi_M$ to the input", fontsize=LABEL_FONTSIZE)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=LABEL_FONTSIZE)
+    ax.tick_params(labelsize=TICK_FONTSIZE)
+    fig.tight_layout()
+    fig.savefig(f"hidden_norms_conditioning_sensitivity_{cfg.activation}.svg")
+    fig.savefig(f"hidden_norms_conditioning_sensitivity_{cfg.activation}.png", dpi=150)
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(7, 5))
+    for i, (variant_label, _, _, _) in enumerate(residual_variants):
+        ax.semilogy(
             depth_grid,
             residual_result[(variant_label, "condition_number")],
             "o-",
+            markersize=6,
+            linewidth=2.5,
             color=f"C{i}",
-            label=label,
+            label=variant_labels[variant_label],
         )
-    axes[0].set_xlabel("Number of layers $L$", fontsize=12)
-    axes[0].set_ylabel(r"sensitivity of $h_L$ to the input", fontsize=12)
-    axes[0].grid(True, alpha=0.3)
-    axes[0].legend(fontsize=9)
-    axes[1].set_xlabel("Number of layers $L$", fontsize=12)
-    axes[1].set_ylabel("input-Jacobian condition number", fontsize=12)
-    axes[1].grid(True, alpha=0.3)
-    axes[1].legend(fontsize=9)
+    ax.set_xlabel(xlabel, fontsize=LABEL_FONTSIZE)
+    ax.set_ylabel("input-Jacobian condition number", fontsize=LABEL_FONTSIZE)
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=LABEL_FONTSIZE)
+    ax.tick_params(labelsize=TICK_FONTSIZE)
     fig.tight_layout()
-    fig.savefig(f"hidden_norms_conditioning_{cfg.activation}.svg")
-    fig.savefig(f"hidden_norms_conditioning_{cfg.activation}.png", dpi=150)
+    fig.savefig(f"hidden_norms_conditioning_jacobian_{cfg.activation}.svg")
+    fig.savefig(f"hidden_norms_conditioning_jacobian_{cfg.activation}.png", dpi=150)
     plt.close(fig)
     print("Part 1 (plain MLP, two init scales):")
     for key in ("Kaiming sqrt(2/H)", "1.0 (unscaled)"):

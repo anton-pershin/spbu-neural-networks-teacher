@@ -8,9 +8,9 @@ Run: `~/venvs/spbu_nn/bin/python -m spbunn.scripts.hidden_norms_propagation`
 We study a fully-connected MLP with $L$ hidden layers of width $N$, zero biases, and
 weights sampled independently $W_{ij} \sim \mathcal{N}(0, \sigma^2)$. Every hidden block is
 
-$$h_l = \mathrm{ReLU}(W_l\, h_{l-1}), \qquad l = 1, \dots, L,$$
+$$\xi_l = \mathrm{ReLU}(W_l\, \xi_{l-1}), \qquad l = 1, \dots, L,$$
 
-with $h_0 = x \in \mathbb{R}^d$ the input. We record what happens in a **single forward and
+with $\xi_0 = x \in \mathbb{R}^d$ the input. We record what happens in a **single forward and
 backward pass at initialization** — no training. All experiments use `float64` (the exploding
 regimes overflow `float32` at moderate depths) and average over several random
 initializations (seeds), plotting mean $\pm$ std bands.
@@ -30,9 +30,9 @@ layer 0 on.
 **Theory (zero-mean approximation).** For ReLU with zero biases, the pre-activations are
 approximately zero-mean Gaussian, and
 
-$$\mathbb{E}\|h_l\|^2 \;=\; d\,\Big(\frac{N\sigma^2}{2}\Big)^{l}, 
+$$\mathbb{E}\|\xi_l\|^2 \;=\; d\,\Big(\frac{N\sigma^2}{2}\Big)^{l}, 
 \qquad 
-\mathbb{E}\left\|\frac{\partial \mathcal{L}}{\partial h_l}\right\|^2 \;=\; 
+\mathbb{E}\left\|\frac{\partial \mathcal{L}}{\partial \xi_l}\right\|^2 \;=\; 
 N\,\Big(\frac{\sigma^2 (N+1)}{2}\Big)^{L-l+1}
 \quad (l \ge 2),$$
 
@@ -54,14 +54,16 @@ Defaults below: $N = 256$, $d = 16$, batch 256, 5 seeds, ReLU.
 
 ## 2. Experiment 1: forward and backward norms vs the initialization scale
 
-![Forward and backward norms vs layer index, Kaiming vs unscaled init](notes/hidden_norms_init_relu.svg)
+![Forward: hidden norm vs layer index, Kaiming vs unscaled init](notes/hidden_norms_init_forward_relu.svg)
 
-Fix $L = 32$ and compare two initializations (figure above):
+![Backward: gradient norm vs layer index, Kaiming vs unscaled init](notes/hidden_norms_init_backward_relu.svg)
+
+Fix the number of layers $M = L = 32$ and compare two initializations (figures above):
 
 - **Kaiming, $\sigma = \sqrt{2/N}$** (per-layer factor $q = N\sigma^2/2 = 1$, critical):
   both curves stay $O(1)$ for all 32 layers — the network sits at the edge of chaos.
 - **Unscaled, $\sigma = 1$, i.e. $W_{ij} \sim \mathcal{N}(0, 1)$** ($q = N\sigma^2/2 = 128$):
-  both curves explode exponentially — $\|h_l\|$ reaches $\sim 10^{34}$ by layer 32, and the
+  both curves explode exponentially — $\|\xi_l\|$ reaches $\sim 10^{34}$ by layer 32, and the
   gradients explode correspondingly in the backward pass.
 
 The dashed zero-mean theory lines track the measurements over more than 30 orders of
@@ -76,30 +78,33 @@ $\sigma^2 d / 2$ — hence the characteristic dip of the first point of the theo
 ## 3. Experiment 2: conditioning of the input–output map vs depth
 
 Here we ask not *how large* the signal is, but *how well-conditioned* the map from input
-to the last hidden layer is. **Design.** For each of 16 random inputs $x$ we compute:
+to the last hidden layer is. In this section the number of layers is denoted $M$
+(as in the figures below). **Design.** For each of 16 random inputs $x$ we compute:
 
 1. *Empirical sensitivity* (the finite-difference probe): sample random directions
    $\|dx\| = 10^{-3}$ and measure
    $$S(x, dx) = \frac{\|f(x + dx) - f(x)\|_2}{\|dx\|_2},$$
    averaged over directions and inputs.
-2. *The exact input Jacobian* $J = \partial h_L / \partial x \in \mathbb{R}^{N \times d}$
+2. *The exact input Jacobian* $J = \partial \xi_M / \partial x \in \mathbb{R}^{N \times d}$
    via autograd, and its singular values $\sigma_{\max} \ge \dots \ge \sigma_{\min}$:
    the condition number $\kappa = \sigma_{\max}/\sigma_{\min}$ and the Frobenius norm
    $\|J\|_F$ (which equals the RMS sensitivity over all directions).
 
 ### 3.1 Plain MLP, Kaiming vs unscaled initialization
 
-![Empirical sensitivity and Jacobian condition number vs depth, plain MLP, two init scales](notes/hidden_norms_conditioning_init_relu.svg)
+![Empirical input sensitivity vs depth, plain MLP, two init scales](notes/hidden_norms_conditioning_init_sensitivity_relu.svg)
+
+![Input-Jacobian condition number vs depth, plain MLP, two init scales](notes/hidden_norms_conditioning_init_jacobian_relu.svg)
 
 Two cases, plain network (figure above):
 
-- **Kaiming (green).** The average sensitivity is flat at $\approx 1$ for all $L$ — the
+- **Kaiming (green).** The average sensitivity is flat at $\approx 1$ for all $M$ — the
   same criticality as in Experiment 1. But the spectrum spreads exponentially:
   $$\sigma_{\max}: 1.3 \to 3.2, \qquad 
   \sigma_{\min}: 0.67 \to 3.1\times 10^{-3}, \qquad 
-  \kappa: 2 \to 9.9 \times 10^{2} \quad (L = 1 \to 64).$$
+  \kappa: 2 \to 9.9 \times 10^{2} \quad (M = 1 \to 64).$$
 - **Unscaled, $\sigma = 1$ (red).** Sensitivity explodes astronomically
-  ($\sim 10^{68}$ by $L = 64$ — each layer multiplies the gain by $\approx 11$), while
+  ($\sim 10^{68}$ by $M = 64$ — each layer multiplies the gain by $\approx 11$), while
   its condition number grows almost exactly like the Kaiming case
   ($2 \to 1.2\times 10^3$): the condition number is a *ratio* of singular values and is
   largely invariant to the overall gain.
@@ -112,18 +117,20 @@ anisotropy (not the average norm) is the mechanism behind shattered gradients.
 
 ### 3.2 Do residual connections fix it?
 
-![Empirical sensitivity and Jacobian condition number vs depth, residual variants at Kaiming init](notes/hidden_norms_conditioning_relu.svg)
+![Empirical input sensitivity vs depth, residual variants at Kaiming init](notes/hidden_norms_conditioning_sensitivity_relu.svg)
 
-We add skip connections, $h_l = h_{l-1} + s\cdot \mathrm{ReLU}(W_l h_{l-1})$ (the first,
+![Input-Jacobian condition number vs depth, residual variants at Kaiming init](notes/hidden_norms_conditioning_jacobian_relu.svg)
+
+We add skip connections, $\xi_l = \xi_{l-1} + s\cdot \mathrm{ReLU}(W_l \xi_{l-1})$ (the first,
 $d \to N$ block stays plain, as the ResNet stem does), and rerun the experiment at the
 Kaiming scale for three choices of the branch scale $s$ (figure above, all four curves):
 
-| variant | sensitivity $\|dy/dx\|$ ($L=1 \to 64$) | $\kappa$ ($L=1 \to 64$) | verdict |
+| variant | sensitivity $\|dy/dx\|$ ($M=1 \to 64$) | $\kappa$ ($M=1 \to 64$) | verdict |
 |---|---|---|---|
 | plain | $1.0 \to 0.86$ | $2 \to 1.2\times 10^{3}$ | ill-conditioned |
 | $s = 1$ (naive) | $1.0 \to 1.3\times 10^{13}$ | $2 \to 2.6\times 10^{6}$ | **explodes** |
-| $s = 1/\sqrt{L}$ (ResNet-style) | $1.0 \to 16$ | $2 \to 78$ | mild drift |
-| $s = 1/L$ | $1.0 \to 1.05$ | $2 \to 2.5$ | **fixed** |
+| $s = 1/\sqrt{M}$ (ResNet-style) | $1.0 \to 16$ | $2 \to 78$ | mild drift |
+| $s = 1/M$ | $1.0 \to 1.05$ | $2 \to 2.5$ | **fixed** |
 
 The intuition, block by block: with a skip, the block Jacobian is
 $I + s \cdot \mathrm{diag}(\text{mask})\, W$, whose variance gain is roughly
@@ -131,16 +138,16 @@ $1 + s^2 N\sigma^2/2$. So:
 
 - **$s = 1$ multiplies the signal variance by $1.5$ per block** — skip connections alone
   do *not* stabilize anything; they make a Kaiming-initialized network explode.
-- **$s = 1/\sqrt{L}$** is the standard pre-activation ResNet initialization; it slows the
+- **$s = 1/\sqrt{M}$** is the standard pre-activation ResNet initialization; it slows the
   drift but does not eliminate it.
-- **$s = 1/L$** makes every block a vanishing perturbation of the identity, so the whole
+- **$s = 1/M$** makes every block a vanishing perturbation of the identity, so the whole
   map is near-isometric for any depth — perfect conditioning by construction. The price:
   at initialization the network is close to the identity map (the "ResNets at init are
   almost the identity" observation of Balduzzi et al. 2017), i.e. the blocks barely
-  contribute; training dynamics may prefer the $1/\sqrt{L}$ trade-off.
+  contribute; training dynamics may prefer the $1/\sqrt{M}$ trade-off.
 
 **Takeaway:** residual connections fix ill-conditioning *only* when the branch is scaled
-so that blocks are perturbative ($s \propto 1/L$); naive skip connections at the Kaiming
+so that blocks are perturbative ($s \propto 1/M$); naive skip connections at the Kaiming
 scale make things worse.
 
 ## 4. Reproducing
