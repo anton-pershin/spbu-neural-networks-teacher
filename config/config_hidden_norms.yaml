@@ -26,6 +26,7 @@ weight_scale: 0.08838834764831845  # sqrt(2 / hidden_dim) with hidden_dim = 256
 init_sweep:
   n_layers: 32
   weight_scales:
+    1.0/N: 0.00390625                  # factor 1/256: decay (half the Kaiming variance)
     sqrt(2/H): 0.08838834764831845    # factor 1: critical (Kaiming for ReLU)
     1.0 (unscaled): 1.0               # factor 128: strong explode
 

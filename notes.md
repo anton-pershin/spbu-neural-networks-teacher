@@ -58,16 +58,18 @@ Defaults below: $N = 256$, $d = 16$, batch 256, 5 seeds, ReLU.
 
 ![Backward: gradient norm vs layer index, Kaiming vs unscaled init](notes/hidden_norms_init_backward_relu.svg)
 
-Fix the number of layers $M = L = 32$ and compare two initializations (figures above):
+Fix the number of layers $M = L = 32$ and compare three initializations (figures above):
 
-- **Kaiming, $\sigma = \sqrt{2/N}$** (per-layer factor $q = N\sigma^2/2 = 1$, critical):
+- **Subcritical, $\sigma^2 = 1/N$** (per-layer factor $q = 1/2$):
+  both curves decay exponentially — the signal and the gradients vanish with depth.
+- **Kaiming, $\sigma^2 = 2/N$** (per-layer factor $q = N\sigma^2/2 = 1$, critical):
   both curves stay $O(1)$ for all 32 layers — the network sits at the edge of chaos.
-- **Unscaled, $\sigma = 1$, i.e. $W_{ij} \sim \mathcal{N}(0, 1)$** ($q = N\sigma^2/2 = 128$):
+- **Supercritical, $\sigma = 1$, i.e. $W_{ij} \sim \mathcal{N}(0, 1)$** ($q = N\sigma^2/2 = 128$):
   both curves explode exponentially — $\|\xi_l\|$ reaches $\sim 10^{34}$ by layer 32, and the
   gradients explode correspondingly in the backward pass.
 
 The dashed zero-mean theory lines track the measurements over more than 30 orders of
-magnitude. The two regimes bracket the teaching point: everything is decided by whether
+magnitude. The three regimes bracket the teaching point: everything is decided by whether
 the per-layer factor $q$ is below, at, or above $1$, and the critical choice is exactly
 Kaiming's $\sigma^2 = 2/N$.
 
@@ -96,20 +98,23 @@ to the last hidden layer is. In this section the number of layers is denoted $M$
 
 ![Input-Jacobian condition number vs depth, plain MLP, two init scales](notes/hidden_norms_conditioning_init_jacobian_relu.svg)
 
-Two cases, plain network (figure above):
+Three cases, plain network (figures above):
 
-- **Kaiming (green).** The average sensitivity is flat at $\approx 1$ for all $M$ — the
+- **Kaiming (orange).** The average sensitivity is flat at $\approx 1$ for all $M$ — the
   same criticality as in Experiment 1. But the spectrum spreads exponentially:
   $$\sigma_{\max}: 1.3 \to 3.2, \qquad 
   \sigma_{\min}: 0.67 \to 3.1\times 10^{-3}, \qquad 
   \kappa: 2 \to 9.9 \times 10^{2} \quad (M = 1 \to 64).$$
-- **Unscaled, $\sigma = 1$ (red).** Sensitivity explodes astronomically
+- **Subcritical, $\sigma^2 = 1/N$ (blue).** The sensitivity decays exponentially
+  ($\sim 10^{-90}$ by $M = 64$), tracking the vanishing signal of Experiment 1; its
+  condition number grows exactly like the Kaiming case.
+- **Supercritical, $\sigma = 1$ (green).** Sensitivity explodes astronomically
   ($\sim 10^{68}$ by $M = 64$ — each layer multiplies the gain by $\approx 11$), while
   its condition number grows almost exactly like the Kaiming case
   ($2 \to 1.2\times 10^3$): the condition number is a *ratio* of singular values and is
   largely invariant to the overall gain.
 
-**The teaching point of the green curves:** a product of many random matrices has
+**The teaching point of the orange curve:** a product of many random matrices has
 singular values spanning an exponentially wide range even when the typical gain is $1$.
 The map becomes hypersensitive to a few input directions and nearly blind to most — this
 anisotropy (not the average norm) is the mechanism behind shattered gradients.

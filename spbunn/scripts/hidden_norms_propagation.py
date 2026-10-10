@@ -315,6 +315,7 @@ def run_init_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     n_layers = cfg.init_sweep.n_layers
     # Legend labels expressed via the variance; the Kaiming entry is symbolic.
     init_labels = {
+        "1.0/N": r"$\sigma^2 = 1/N$",
         "sqrt(2/H)": r"$\sigma^2 = 2/N$ (Kaiming)",
         "1.0 (unscaled)": r"$\sigma^2 = 1$",
     }
@@ -476,8 +477,10 @@ def run_conditioning_experiment(
 def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     sweep_cfg = cfg.conditioning
 
-    # Part 1: plain MLP, two initialization scales (unscaled N(0,1) and Kaiming).
+    # Part 1: plain MLP, three initialization scales (1/N, unscaled N(0,1),
+    # and Kaiming).
     plain_variants = [
+        ("1.0/N", False, 1.0, 1.0 / cfg.hidden_dim),
         ("1.0 (unscaled)", False, 1.0, 1.0),
         ("Kaiming sqrt(2/H)", False, 1.0, cfg.weight_scale),
     ]
@@ -522,12 +525,13 @@ def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, res
     # Legend labels shared with the init-norms figure: expressed via the
     # variance, not the std.
     init_labels = {
+        "1.0/N": r"$\sigma^2 = 1/N$",
         "Kaiming sqrt(2/H)": r"$\sigma^2 = 2/N$ (Kaiming)",
         "1.0 (unscaled)": r"$\sigma^2 = 1$",
     }
-    # Figure 1a (part 1): plain MLP, two init scales — sensitivity.
+    # Figure 1a (part 1): plain MLP, three init scales — sensitivity.
     fig, ax = plt.subplots(figsize=(7, 5))
-    for key in ("Kaiming sqrt(2/H)", "1.0 (unscaled)"):
+    for key in ("1.0/N", "Kaiming sqrt(2/H)", "1.0 (unscaled)"):
         ax.semilogy(
             depth_grid,
             plain_result[(key, "empirical_sensitivity")],
@@ -546,9 +550,9 @@ def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, res
     fig.savefig(f"hidden_norms_conditioning_init_sensitivity_{cfg.activation}.png", dpi=150)
     plt.close(fig)
 
-    # Figure 1b (part 1): plain MLP, two init scales — Jacobian conditioning.
+    # Figure 1b (part 1): plain MLP, three init scales — Jacobian conditioning.
     fig, ax = plt.subplots(figsize=(7, 5))
-    for key in ("Kaiming sqrt(2/H)", "1.0 (unscaled)"):
+    for key in ("1.0/N", "Kaiming sqrt(2/H)", "1.0 (unscaled)"):
         ax.semilogy(
             depth_grid,
             plain_result[(key, "condition_number")],
@@ -615,8 +619,8 @@ def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, res
     fig.savefig(f"hidden_norms_conditioning_jacobian_{cfg.activation}.svg")
     fig.savefig(f"hidden_norms_conditioning_jacobian_{cfg.activation}.png", dpi=150)
     plt.close(fig)
-    print("Part 1 (plain MLP, two init scales):")
-    for key in ("Kaiming sqrt(2/H)", "1.0 (unscaled)"):
+    print("Part 1 (plain MLP, three init scales):")
+    for key in ("1.0/N", "Kaiming sqrt(2/H)", "1.0 (unscaled)"):
         print(f"Variant: {key}")
         for i, n_layers in enumerate(depth_grid):
             print(
