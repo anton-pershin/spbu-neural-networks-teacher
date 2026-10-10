@@ -304,7 +304,7 @@ def loss_landscape(cfg: DictConfig):
             )
             loss_ax.set_xlim(*loss_xlim)
             plt.tight_layout()
-            plt.savefig(f"loss_landscape_func_{func_info.name}_{run['suffix']}.png")
+            plt.savefig(f"loss_landscape_func_{func_info.name}_{run['suffix']}.svg")
             plt.close(fig)
 
 
