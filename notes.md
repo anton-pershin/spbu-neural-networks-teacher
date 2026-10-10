@@ -36,7 +36,7 @@ $$\mathbb{E}\|h_l\|^2 \;=\; d\,\Big(\frac{N\sigma^2}{2}\Big)^{l},
 N\,\Big(\frac{\sigma^2 (N+1)}{2}\Big)^{L-l+1}
 \quad (l \ge 2),$$
 
-up to corrections. The *forward* per-layer factor is $q = H\sigma^2/2$ (exactly, in
+up to corrections. The *forward* per-layer factor is $q = N\sigma^2/2$ (exactly, in
 expectation); the *backward* factor carries the $+1$ finite-width correction from the
 weight-gradient term. Note the backward signal compounds over the **remaining** layers
 $(L - l)$, hence its much steeper depth dependence than the forward curve. The Kaiming
@@ -58,9 +58,9 @@ Defaults below: $N = 256$, $d = 16$, batch 256, 5 seeds, ReLU.
 
 Fix $L = 32$ and compare two initializations (figure above):
 
-- **Kaiming, $\sigma = \sqrt{2/N}$** (per-layer factor $q = H\sigma^2/2 = 1$, critical):
+- **Kaiming, $\sigma = \sqrt{2/N}$** (per-layer factor $q = N\sigma^2/2 = 1$, critical):
   both curves stay $O(1)$ for all 32 layers — the network sits at the edge of chaos.
-- **Unscaled, $\sigma = 1$, i.e. $W_{ij} \sim \mathcal{N}(0, 1)$** ($q = H\sigma^2/2 = 128$):
+- **Unscaled, $\sigma = 1$, i.e. $W_{ij} \sim \mathcal{N}(0, 1)$** ($q = N\sigma^2/2 = 128$):
   both curves explode exponentially — $\|h_l\|$ reaches $\sim 10^{34}$ by layer 32, and the
   gradients explode correspondingly in the backward pass.
 
@@ -115,7 +115,7 @@ anisotropy (not the average norm) is the mechanism behind shattered gradients.
 ![Empirical sensitivity and Jacobian condition number vs depth, residual variants at Kaiming init](notes/hidden_norms_conditioning_relu.svg)
 
 We add skip connections, $h_l = h_{l-1} + s\cdot \mathrm{ReLU}(W_l h_{l-1})$ (the first,
-$d \to H$ block stays plain, as the ResNet stem does), and rerun the experiment at the
+$d \to N$ block stays plain, as the ResNet stem does), and rerun the experiment at the
 Kaiming scale for three choices of the branch scale $s$ (figure above, all four curves):
 
 | variant | sensitivity $\|dy/dx\|$ ($L=1 \to 64$) | $\kappa$ ($L=1 \to 64$) | verdict |
@@ -127,7 +127,7 @@ Kaiming scale for three choices of the branch scale $s$ (figure above, all four 
 
 The intuition, block by block: with a skip, the block Jacobian is
 $I + s \cdot \mathrm{diag}(\text{mask})\, W$, whose variance gain is roughly
-$1 + s^2 H\sigma^2/2$. So:
+$1 + s^2 N\sigma^2/2$. So:
 
 - **$s = 1$ multiplies the signal variance by $1.5$ per block** — skip connections alone
   do *not* stabilize anything; they make a Kaiming-initialized network explode.
