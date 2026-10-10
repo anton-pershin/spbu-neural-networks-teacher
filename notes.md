@@ -54,7 +54,7 @@ Defaults below: $H = 256$, $d = 16$, batch 256, 5 seeds, ReLU.
 
 ## 2. Experiment 1: forward and backward norms vs the initialization scale
 
-![Forward and backward norms vs layer index, Kaiming vs unscaled init](notes/hidden_norms_init_relu.png)
+![Forward and backward norms vs layer index, Kaiming vs unscaled init](notes/hidden_norms_init_relu.svg)
 
 Fix $L = 32$ and compare two initializations (figure above):
 
@@ -89,7 +89,7 @@ to the last hidden layer is. **Design.** For each of 16 random inputs $x$ we com
 
 ### 3.1 Plain MLP, Kaiming vs unscaled initialization
 
-![Empirical sensitivity and Jacobian condition number vs depth, plain MLP, two init scales](notes/hidden_norms_conditioning_init_relu.png)
+![Empirical sensitivity and Jacobian condition number vs depth, plain MLP, two init scales](notes/hidden_norms_conditioning_init_relu.svg)
 
 Two cases, plain network (figure above):
 
@@ -112,7 +112,7 @@ anisotropy (not the average norm) is the mechanism behind shattered gradients.
 
 ### 3.2 Do residual connections fix it?
 
-![Empirical sensitivity and Jacobian condition number vs depth, residual variants at Kaiming init](notes/hidden_norms_conditioning_relu.png)
+![Empirical sensitivity and Jacobian condition number vs depth, residual variants at Kaiming init](notes/hidden_norms_conditioning_relu.svg)
 
 We add skip connections, $h_l = h_{l-1} + s\cdot \mathrm{ReLU}(W_l h_{l-1})$ (the first,
 $d \to H$ block stays plain, as the ResNet stem does), and rerun the experiment at the
