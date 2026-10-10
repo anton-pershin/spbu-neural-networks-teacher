@@ -199,6 +199,10 @@ def plot_loss_curve(
     ax.set_ylabel("Loss", fontsize=18)
     ax.tick_params(axis="both", labelsize=14)
     ax.set_yscale("log")
+    ax.set_ylim(1e-2, 1e3)
+    loss_ticks = [1e-2, 1e-1, 1e0, 1e1, 1e2, 1e3]
+    ax.set_yticks(loss_ticks)
+    ax.set_yticklabels(["1e-2", "1e-1", "1", "10", "100", "1e3"])
     ax.grid(True)
 
 
@@ -304,7 +308,9 @@ def loss_landscape(cfg: DictConfig):
             )
             loss_ax.set_xlim(*loss_xlim)
             plt.tight_layout()
-            plt.savefig(f"loss_landscape_func_{func_info.name}_{run['suffix']}.svg")
+            png_path = f"loss_landscape_func_{func_info.name}_{run['suffix']}.png"
+            plt.savefig(png_path)
+            plt.savefig(png_path.replace(".png", ".svg"))
             plt.close(fig)
 
 
