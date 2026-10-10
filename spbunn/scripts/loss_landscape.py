@@ -65,6 +65,7 @@ def compute_trajectory(
     momentum: float = 0.0,
     optimizer_name: str = "sgd",
     betas: tuple[float, float] = (0.9, 0.999),
+    nesterov: bool = False,
 ) -> tuple[list[float], list[float], list[float]]:
     """Runs full-batch optimization on (theta_0, theta_1) and records the trajectory."""
     f_true = instantiate(func_info.func)(
@@ -91,7 +92,12 @@ def compute_trajectory(
     elif optimizer_name == "rmsprop":
         optimizer = torch.optim.RMSprop(parameters, lr=lr)
     else:
-        optimizer = torch.optim.SGD(parameters, lr=lr, momentum=momentum)
+        optimizer = torch.optim.SGD(
+            parameters,
+            lr=lr,
+            momentum=momentum,
+            nesterov=nesterov,
+        )
 
     trajectory_theta_0: list[float] = [theta_0]
     trajectory_theta_1: list[float] = [theta_1]
@@ -226,6 +232,15 @@ def optimizer_runs(func_info: DictConfig) -> list[dict]:
             "momentum": func_info.get("momentum", 0.9),
         },
         {
+            "name": "SGD + Nesterov momentum",
+            "color": "tab:cyan",
+            "suffix": "sgd_nesterov",
+            "optimizer_name": "sgd",
+            "lr": func_info.lr,
+            "momentum": func_info.get("momentum", 0.9),
+            "nesterov": True,
+        },
+        {
             "name": "RMSprop",
             "color": "tab:purple",
             "suffix": "rmsprop",
@@ -265,6 +280,7 @@ def loss_landscape(cfg: DictConfig):
                 momentum=run.get("momentum", 0.0),
                 optimizer_name=run["optimizer_name"],
                 betas=run.get("betas", (0.9, 0.999)),
+                nesterov=run.get("nesterov", False),
             )
 
         # All figures share identical axis limits so the per-optimizer plots are comparable.
