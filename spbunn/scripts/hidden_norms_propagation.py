@@ -221,12 +221,12 @@ def add_theory_lines(
     """Dashed theoretical predictions for the mean-squared norms (ReLU)."""
     layer_indices = np.arange(1, n_layers + 1)
     if mode == "forward":
-        # E ||h_l||^2 = d * (H sigma^2 / 2)^l for ReLU with zero biases.
+        # E ||h_l||^2 = d * (N sigma^2 / 2)^l for ReLU with zero biases.
         theory = input_dim * (weight_scale**2 * hidden_dim / 2.0) ** layer_indices
-        label = "zero-mean theory " + r"$\sqrt{d (H\sigma^2/2)^l}$" if with_label else None
+        label = r"$\sqrt{d (N\sigma^2/2)^l}$" if with_label else None
     else:
-        # E ||dL/dh_l||^2 = H * (sigma^2 (H + 1) / 2)^(L - l + 1) for l >= 2:
-        # the backward signal starts at E||g||^2 = H (isotropic output
+        # E ||dL/dh_l||^2 = N * (sigma^2 (N + 1) / 2)^(L - l + 1) for l >= 2:
+        # the backward signal starts at E||g||^2 = N (isotropic output
         # gradient) and is multiplied by the expected squared Frobenius norm
         # of each layer Jacobian as it travels towards earlier layers. The
         # FIRST layer (l = 1) instead contracts into the d-dimensional input
@@ -239,8 +239,8 @@ def add_theory_lines(
             * (weight_scale**2 * (hidden_dim + 1) / 2.0) ** (n_layers - 1)
             * (weight_scale**2 * input_dim / 2.0)
         )
-        label = "zero-mean theory " + r"$\sqrt{H (\sigma^2 (H+1)/2)^{L-l+1}}$" if with_label else None
-    ax.loglog(
+        label = r"$\sqrt{N (\sigma^2 (N+1)/2)^{L-l+1}}$" if with_label else None
+    ax.plot(
         layer_indices,
         np.sqrt(theory),
         "--",
@@ -257,14 +257,12 @@ def plot_norm_curves(
     ax,
     curves: dict,
     norm_key: str,
-    title: str,
     ylabel: str,
     with_theory: bool,
     input_dim: int,
     hidden_dim: int,
 ) -> None:
     """curves: mapping of any key -> {label, weight_scale, norms}."""
-    cmap = matplotlib.colormaps["viridis"]
     for i, (key, entry) in enumerate(curves.items()):
         norms = entry["norms"]
         weight_scale = entry["weight_scale"]
@@ -272,7 +270,7 @@ def plot_norm_curves(
         xs = np.arange(1, n_layers + 1)
         mean = norms[norm_key + "_mean"]
         std = norms[norm_key + "_std"]
-        color = cmap(i / max(len(curves) - 1, 1))
+        color = f"C{i}"
         ax.plot(xs, mean, "-o", markersize=3, linewidth=1.5, color=color, label=entry["label"])
         ax.fill_between(xs, mean - std, mean + std, color=color, alpha=0.2)
         if with_theory and norm_key in ("hidden_pre_norm", "grad_input_norm"):
@@ -287,14 +285,13 @@ def plot_norm_curves(
             )
     ax.set_xlabel("Layer index $l$", fontsize=12)
     ax.set_ylabel(ylabel, fontsize=12)
-    ax.set_title(title, fontsize=13)
-    ax.grid(True, which="both", alpha=0.3)
+    ax.set_yscale("log")
+    ax.grid(True, alpha=0.3)
     ax.legend(fontsize=9)
 
 
 def plot_figure(
     curves: dict,
-    title_suffix: str,
     filename_base: str,
     input_dim: int,
     hidden_dim: int,
@@ -305,7 +302,6 @@ def plot_figure(
         ax=axes[0],
         curves=curves,
         norm_key="hidden_pre_norm",
-        title="Forward: hidden pre-activations",
         ylabel=r"$\|h_l\|_2$ (batch mean)",
         with_theory=with_theory,
         input_dim=input_dim,
@@ -315,51 +311,29 @@ def plot_figure(
         ax=axes[1],
         curves=curves,
         norm_key="grad_input_norm",
-        title="Backward: gradients w.r.t. layer pre-activations",
         ylabel=r"$\|dL/dh_l\|_2$ (batch mean)",
         with_theory=with_theory,
         input_dim=input_dim,
         hidden_dim=hidden_dim,
     )
-    fig.suptitle(title_suffix, fontsize=12)
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.tight_layout()
     fig.savefig(f"{filename_base}.svg")
     fig.savefig(f"{filename_base}.png", dpi=150)
     plt.close(fig)
 
 
-def run_depth_sweep(cfg: DictConfig, seeds: list[int]) -> None:
-    curves = {}
-    for n_layers in cfg.depth_grid:
-        curves[n_layers] = {
-            "label": rf"$L = {n_layers}$",
-            "weight_scale": cfg.weight_scale,
-            "norms": run_averaged_experiment(
-                n_layers=n_layers,
-                weight_scale=cfg.weight_scale,
-                input_dim=cfg.input_dim,
-                hidden_dim=cfg.hidden_dim,
-                activation_name=cfg.activation,
-                batch_size=cfg.batch_size,
-                seeds=seeds,
-            ),
-        }
-    plot_figure(
-        curves=curves,
-        title_suffix=f" ({cfg.activation}, $\\sigma = {cfg.weight_scale:.3f}$, varied depth $L$)",
-        filename_base=f"hidden_norms_depth_{cfg.activation}",
-        input_dim=cfg.input_dim,
-        hidden_dim=cfg.hidden_dim,
-        with_theory=cfg.with_theory,
-    )
-
-
 def run_init_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     curves = {}
     n_layers = cfg.init_sweep.n_layers
+    hidden_dim = cfg.hidden_dim
+    # Legend labels expressed via the variance; the Kaiming entry is symbolic.
+    init_labels = {
+        "sqrt(2/H)": r"$\sigma^2 = 2/N$ (Kaiming)",
+        "1.0 (unscaled)": r"$\sigma^2 = 1$",
+    }
     for label, weight_scale in cfg.init_sweep.weight_scales.items():
         curves[label] = {
-            "label": rf"$\sigma = {weight_scale:.4f}$ ({label})",
+            "label": init_labels[label],
             "weight_scale": weight_scale,
             "norms": run_averaged_experiment(
                 n_layers=n_layers,
@@ -373,7 +347,6 @@ def run_init_sweep(cfg: DictConfig, seeds: list[int]) -> None:
         }
     plot_figure(
         curves=curves,
-        title_suffix=f" ({cfg.activation}, $L = {n_layers}$, varied init $\\sigma$)",
         filename_base=f"hidden_norms_init_{cfg.activation}",
         input_dim=cfg.input_dim,
         hidden_dim=cfg.hidden_dim,
@@ -550,45 +523,36 @@ def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
 
 def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, residual_variants) -> None:
     depth_grid = np.asarray(cfg.depth_grid)
+    # Legend labels shared with the init-norms figure: expressed via the
+    # variance, not the std.
+    init_labels = {
+        "Kaiming sqrt(2/H)": r"$\sigma^2 = 2/N$ (Kaiming)",
+        "1.0 (unscaled)": r"$\sigma^2 = 1$",
+    }
     # Figure 1 (part 1): plain MLP, two init scales.
-    # The plain variants carry their own weight scale in the label; rebuild the
-    # experiment data: "1.0 (unscaled)" was run with cfg.weight_scale, so rerun
-    # it properly instead of mislabeling.
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-    for key, color in [
-        ("Kaiming sqrt(2/H)", "tab:green"),
-        ("1.0 (unscaled)", "tab:red"),
-    ]:
-        axes[0].loglog(
+    for key in ("Kaiming sqrt(2/H)", "1.0 (unscaled)"):
+        axes[0].plot(
             depth_grid,
             plain_result[(key, "empirical_sensitivity")],
             "o-",
-            color=color,
-            label=rf"empirical $\|dy/dx\|$: {key}",
+            label=init_labels[key],
         )
-        axes[1].loglog(
+        axes[1].semilogy(
             depth_grid,
             plain_result[(key, "condition_number")],
             "o-",
-            color=color,
-            label=rf"$\sigma_{{\max}}/\sigma_{{\min}}$: {key}",
+            label=init_labels[key],
         )
     axes[0].set_xlabel("Number of layers $L$", fontsize=12)
     axes[0].set_ylabel(r"sensitivity of $h_L$ to the input", fontsize=12)
-    axes[0].set_title("Average sensitivity", fontsize=13)
-    axes[0].grid(True, which="both", alpha=0.3)
-    axes[0].legend(fontsize=8)
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend(fontsize=9)
     axes[1].set_xlabel("Number of layers $L$", fontsize=12)
     axes[1].set_ylabel("input-Jacobian condition number", fontsize=12)
-    axes[1].set_title("Jacobian conditioning", fontsize=13)
-    axes[1].grid(True, which="both", alpha=0.3)
-    axes[1].legend(fontsize=8)
-    fig.suptitle(
-        f"Plain MLP ({cfg.activation}), {sweep_cfg.n_inputs} inputs, "
-        f"$||dx|| = {sweep_cfg.perturbation_norm:.0e}$",
-        fontsize=12,
-    )
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    axes[1].grid(True, alpha=0.3)
+    axes[1].legend(fontsize=9)
+    fig.tight_layout()
     fig.savefig(f"hidden_norms_conditioning_init_{cfg.activation}.svg")
     fig.savefig(f"hidden_norms_conditioning_init_{cfg.activation}.png", dpi=150)
     plt.close(fig)
@@ -600,47 +564,32 @@ def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, res
         "residual (branch x1/sqrt(L))": "residual, branch $\\times 1/\\sqrt{L}$",
         "residual (branch x1/L)": "residual, branch $\\times 1/L$",
     }
-    colors = {
-        "plain": "tab:blue",
-        "residual (branch x1)": "tab:red",
-        "residual (branch x1/sqrt(L))": "tab:green",
-        "residual (branch x1/L)": "tab:purple",
-    }
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-    for variant_label, residual, branch_scale, variant_weight_scale in residual_variants:
-        key = variant_label
-        color = colors[key]
-        label = variant_labels[key]
-        axes[0].loglog(
+    for i, (variant_label, _, _, _) in enumerate(residual_variants):
+        label = variant_labels[variant_label]
+        axes[0].semilogy(
             depth_grid,
-            residual_result[(key, "empirical_sensitivity")],
+            residual_result[(variant_label, "empirical_sensitivity")],
             "o-",
-            color=color,
-            label=rf"empirical $\|dy/dx\|$: {label}",
+            color=f"C{i}",
+            label=label,
         )
-        axes[1].loglog(
+        axes[1].semilogy(
             depth_grid,
-            residual_result[(key, "condition_number")],
+            residual_result[(variant_label, "condition_number")],
             "o-",
-            color=color,
-            label=rf"$\sigma_{{\max}}/\sigma_{{\min}}$: {label}",
+            color=f"C{i}",
+            label=label,
         )
     axes[0].set_xlabel("Number of layers $L$", fontsize=12)
     axes[0].set_ylabel(r"sensitivity of $h_L$ to the input", fontsize=12)
-    axes[0].set_title("Average sensitivity", fontsize=13)
-    axes[0].grid(True, which="both", alpha=0.3)
-    axes[0].legend(fontsize=8)
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend(fontsize=9)
     axes[1].set_xlabel("Number of layers $L$", fontsize=12)
     axes[1].set_ylabel("input-Jacobian condition number", fontsize=12)
-    axes[1].set_title("Jacobian conditioning", fontsize=13)
-    axes[1].grid(True, which="both", alpha=0.3)
-    axes[1].legend(fontsize=8)
-    fig.suptitle(
-        f"({cfg.activation}, $\\sigma = {cfg.weight_scale:.3f}$ (Kaiming), "
-        f"$||dx|| = {sweep_cfg.perturbation_norm:.0e}$, {sweep_cfg.n_inputs} inputs)",
-        fontsize=12,
-    )
-    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    axes[1].grid(True, alpha=0.3)
+    axes[1].legend(fontsize=9)
+    fig.tight_layout()
     fig.savefig(f"hidden_norms_conditioning_{cfg.activation}.svg")
     fig.savefig(f"hidden_norms_conditioning_{cfg.activation}.png", dpi=150)
     plt.close(fig)
@@ -668,9 +617,6 @@ def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, res
 
 def main(cfg: DictConfig) -> None:
     seeds = list(range(cfg.n_seeds))
-    if "depth" in cfg.experiments:
-        run_depth_sweep(cfg, seeds)
-        print("Saved hidden_norms_depth_*.svg/.png")
     if "init" in cfg.experiments:
         run_init_sweep(cfg, seeds)
         print("Saved hidden_norms_init_*.svg/.png")

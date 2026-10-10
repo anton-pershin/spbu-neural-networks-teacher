@@ -5,7 +5,7 @@ Run: `~/venvs/spbu_nn/bin/python -m spbunn.scripts.hidden_norms_propagation`
 
 ## 1. Setup
 
-We study a fully-connected MLP with $L$ hidden layers of width $H$, zero biases, and
+We study a fully-connected MLP with $L$ hidden layers of width $N$, zero biases, and
 weights sampled independently $W_{ij} \sim \mathcal{N}(0, \sigma^2)$. Every hidden block is
 
 $$h_l = \mathrm{ReLU}(W_l\, h_{l-1}), \qquad l = 1, \dots, L,$$
@@ -30,10 +30,10 @@ layer 0 on.
 **Theory (zero-mean approximation).** For ReLU with zero biases, the pre-activations are
 approximately zero-mean Gaussian, and
 
-$$\mathbb{E}\|h_l\|^2 \;=\; d\,\Big(\frac{H\sigma^2}{2}\Big)^{l}, 
+$$\mathbb{E}\|h_l\|^2 \;=\; d\,\Big(\frac{N\sigma^2}{2}\Big)^{l}, 
 \qquad 
 \mathbb{E}\left\|\frac{\partial \mathcal{L}}{\partial h_l}\right\|^2 \;=\; 
-H\,\Big(\frac{\sigma^2 (H+1)}{2}\Big)^{L-l+1}
+N\,\Big(\frac{\sigma^2 (N+1)}{2}\Big)^{L-l+1}
 \quad (l \ge 2),$$
 
 up to corrections. The *forward* per-layer factor is $q = H\sigma^2/2$ (exactly, in
@@ -42,7 +42,7 @@ weight-gradient term. Note the backward signal compounds over the **remaining** 
 $(L - l)$, hence its much steeper depth dependence than the forward curve. The Kaiming
 scale
 
-$$\sigma^2 = \frac{2}{H} \quad\Longleftrightarrow\quad q = 1$$
+$$\sigma^2 = \frac{2}{N} \quad\Longleftrightarrow\quad q = 1$$
 
 makes the forward factor exactly $1$: the critical initialization. These closed forms are
 **zero-mean approximations**: ReLU outputs have positive means, and near criticality the
@@ -50,7 +50,7 @@ accumulated mean shift moves the empirical fixed point slightly above the predic
 (forward curves settle a bit above $\sqrt{d}$ instead of exactly $\sqrt{d}$). In the
 decay/explode regimes the theory matches over many orders of magnitude regardless.
 
-Defaults below: $H = 256$, $d = 16$, batch 256, 5 seeds, ReLU.
+Defaults below: $N = 256$, $d = 16$, batch 256, 5 seeds, ReLU.
 
 ## 2. Experiment 1: forward and backward norms vs the initialization scale
 
@@ -58,7 +58,7 @@ Defaults below: $H = 256$, $d = 16$, batch 256, 5 seeds, ReLU.
 
 Fix $L = 32$ and compare two initializations (figure above):
 
-- **Kaiming, $\sigma = \sqrt{2/H}$** (per-layer factor $q = H\sigma^2/2 = 1$, critical):
+- **Kaiming, $\sigma = \sqrt{2/N}$** (per-layer factor $q = H\sigma^2/2 = 1$, critical):
   both curves stay $O(1)$ for all 32 layers — the network sits at the edge of chaos.
 - **Unscaled, $\sigma = 1$, i.e. $W_{ij} \sim \mathcal{N}(0, 1)$** ($q = H\sigma^2/2 = 128$):
   both curves explode exponentially — $\|h_l\|$ reaches $\sim 10^{34}$ by layer 32, and the
@@ -67,9 +67,9 @@ Fix $L = 32$ and compare two initializations (figure above):
 The dashed zero-mean theory lines track the measurements over more than 30 orders of
 magnitude. The two regimes bracket the teaching point: everything is decided by whether
 the per-layer factor $q$ is below, at, or above $1$, and the critical choice is exactly
-Kaiming's $\sigma^2 = 2/H$.
+Kaiming's $\sigma^2 = 2/N$.
 
-One subtlety visible in the backward panel: at $l = 1$ the gradient contracts from $H$
+One subtlety visible in the backward panel: at $l = 1$ the gradient contracts from $N$
 dimensions into the $d$-dimensional input space, replacing the last factor by
 $\sigma^2 d / 2$ — hence the characteristic dip of the first point of the theory line.
 
@@ -82,7 +82,7 @@ to the last hidden layer is. **Design.** For each of 16 random inputs $x$ we com
    $\|dx\| = 10^{-3}$ and measure
    $$S(x, dx) = \frac{\|f(x + dx) - f(x)\|_2}{\|dx\|_2},$$
    averaged over directions and inputs.
-2. *The exact input Jacobian* $J = \partial h_L / \partial x \in \mathbb{R}^{H \times d}$
+2. *The exact input Jacobian* $J = \partial h_L / \partial x \in \mathbb{R}^{N \times d}$
    via autograd, and its singular values $\sigma_{\max} \ge \dots \ge \sigma_{\min}$:
    the condition number $\kappa = \sigma_{\max}/\sigma_{\min}$ and the Frobenius norm
    $\|J\|_F$ (which equals the RMS sensitivity over all directions).
@@ -160,7 +160,7 @@ working directory; the PNG copies embedded here live in `notes/`.
   neural networks through transient chaos.* — random-label probe, mean-field propagation.
 - Schoenholz, S. et al. (2017). *Deep Information Propagation.* — critical initialization
   for signal/gradients.
-- He, K. et al. (2015). *Delving Deep into Rectifiers* — the $\sigma^2 = 2/H$ scaling.
+- He, K. et al. (2015). *Delving Deep into Rectifiers* — the $\sigma^2 = 2/N$ scaling.
 - Balduzzi, D. et al. (2017). *The Shattered Gradients Problem.* — anisotropy of the
   input-Jacobian and residual connections. (The repo's `balduzzi_analysis.py` references
   a `spbunn.resnet` module that does not currently exist in the repo.)
