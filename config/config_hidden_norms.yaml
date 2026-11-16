@@ -3,35 +3,33 @@
 # Run: ~/venvs/spbu_nn/bin/python -m spbunn.scripts.hidden_norms_propagation
 
 input_dim: 16      # iid N(0,1) inputs: isotropic batch already at layer 0
-hidden_dim: 256    # H: width of every hidden layer (large H keeps the
+hidden_dim: 256    # N: width of every hidden layer (large N keeps the
                    # finite-width downward drift of near-critical curves small)
 batch_size: 256
 n_seeds: 5         # random initializations averaged (mean +- std bands)
 activation: relu   # relu | tanh
-with_theory: true  # dashed theoretical curves (ReLU formula only)
 
-# Which experiments to run: [depth, init, conditioning]
+# Which experiments to run: [init, conditioning]
 experiments:
-  - depth
   - init
   - conditioning
 
-# Experiment 1 (Q1, Q2): fixed scale sigma = sqrt(2/H) (Kaiming for ReLU,
-# forward factor H*sigma^2/2 = 1), vary the number of layers.
+# Depth grid and critical Kaiming scale for the conditioning experiment.
+# For ReLU, sigma = sqrt(2/N) gives forward factor N*sigma^2/2 = 1.
 depth_grid: [1, 2, 4, 8, 16, 32, 64]
 weight_scale: 0.08838834764831845  # sqrt(2 / hidden_dim) with hidden_dim = 256
 
-# Experiment 2 (Q3): fixed depth, vary the initialization scale.
-# Per-layer forward factor = H * sigma^2 / 2 is given in the comments.
+# Initialization-sweep experiment: fixed depth, vary the standard deviation.
+# Per-layer forward factor = N * sigma^2 / 2 is given in the comments.
 init_sweep:
   n_layers: 32
   weight_scales:
-    1.0/N: 0.00390625                  # factor 1/256: decay (half the Kaiming variance)
-    sqrt(2/H): 0.08838834764831845    # factor 1: critical (Kaiming for ReLU)
+    1.0/sqrt(N): 0.0625                # variance 1/N: factor 1/2
+    sqrt(2/N): 0.08838834764831845    # variance 2/N: critical (Kaiming for ReLU)
     1.0 (unscaled): 1.0               # factor 128: strong explode
 
-# Experiment 3: input-Jacobian conditioning vs depth.
-# Part 1 uses the Kaiming scale and the unscaled N(0,1) weights (sigma = 1);
+# Input-Jacobian conditioning vs depth.
+# Part 1 compares subcritical, Kaiming, and unscaled plain MLPs;
 # part 2 uses the Kaiming scale with residual connections.
 conditioning:
   n_inputs: 16            # random inputs x per seed

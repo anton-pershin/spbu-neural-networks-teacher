@@ -260,9 +260,7 @@ def plot_figure(
     filename_base: str,
     input_dim: int,
     hidden_dim: int,
-    with_theory: bool,
 ) -> None:
-    del with_theory  # theory lines are no longer plotted
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
     plot_norm_curves(
         ax=axes[0],
@@ -315,8 +313,8 @@ def run_init_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     n_layers = cfg.init_sweep.n_layers
     # Legend labels expressed via the variance; the Kaiming entry is symbolic.
     init_labels = {
-        "1.0/N": r"$\sigma^2 = 1/N$",
-        "sqrt(2/H)": r"$\sigma^2 = 2/N$ (Kaiming)",
+        "1.0/sqrt(N)": r"$\sigma^2 = 1/N$",
+        "sqrt(2/N)": r"$\sigma^2 = 2/N$ (Kaiming)",
         "1.0 (unscaled)": r"$\sigma^2 = 1$",
     }
     for label, weight_scale in cfg.init_sweep.weight_scales.items():
@@ -477,12 +475,12 @@ def run_conditioning_experiment(
 def run_conditioning_sweep(cfg: DictConfig, seeds: list[int]) -> None:
     sweep_cfg = cfg.conditioning
 
-    # Part 1: plain MLP, three initialization scales (1/N, unscaled N(0,1),
-    # and Kaiming).
+    # Part 1: plain MLP, three initialization standard deviations:
+    # 1/sqrt(N), 1, and sqrt(2/N), corresponding to variances 1/N, 1, and 2/N.
     plain_variants = [
-        ("1.0/N", False, 1.0, 1.0 / cfg.hidden_dim),
+        ("1.0/sqrt(N)", False, 1.0, 1.0 / np.sqrt(cfg.hidden_dim)),
         ("1.0 (unscaled)", False, 1.0, 1.0),
-        ("Kaiming sqrt(2/H)", False, 1.0, cfg.weight_scale),
+        ("Kaiming sqrt(2/N)", False, 1.0, cfg.weight_scale),
     ]
     plain_result = run_conditioning_experiment(
         input_dim=cfg.input_dim,
@@ -525,13 +523,13 @@ def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, res
     # Legend labels shared with the init-norms figure: expressed via the
     # variance, not the std.
     init_labels = {
-        "1.0/N": r"$\sigma^2 = 1/N$",
-        "Kaiming sqrt(2/H)": r"$\sigma^2 = 2/N$ (Kaiming)",
+        "1.0/sqrt(N)": r"$\sigma^2 = 1/N$",
+        "Kaiming sqrt(2/N)": r"$\sigma^2 = 2/N$ (Kaiming)",
         "1.0 (unscaled)": r"$\sigma^2 = 1$",
     }
     # Figure 1a (part 1): plain MLP, three init scales — sensitivity.
     fig, ax = plt.subplots(figsize=(7, 5))
-    for key in ("1.0/N", "Kaiming sqrt(2/H)", "1.0 (unscaled)"):
+    for key in ("1.0/sqrt(N)", "Kaiming sqrt(2/N)", "1.0 (unscaled)"):
         ax.semilogy(
             depth_grid,
             plain_result[(key, "empirical_sensitivity")],
@@ -552,7 +550,7 @@ def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, res
 
     # Figure 1b (part 1): plain MLP, three init scales — Jacobian conditioning.
     fig, ax = plt.subplots(figsize=(7, 5))
-    for key in ("1.0/N", "Kaiming sqrt(2/H)", "1.0 (unscaled)"):
+    for key in ("1.0/sqrt(N)", "Kaiming sqrt(2/N)", "1.0 (unscaled)"):
         ax.semilogy(
             depth_grid,
             plain_result[(key, "condition_number")],
@@ -620,7 +618,7 @@ def plot_conditioning_figures(cfg, sweep_cfg, plain_result, residual_result, res
     fig.savefig(f"hidden_norms_conditioning_jacobian_{cfg.activation}.png", dpi=150)
     plt.close(fig)
     print("Part 1 (plain MLP, three init scales):")
-    for key in ("1.0/N", "Kaiming sqrt(2/H)", "1.0 (unscaled)"):
+    for key in ("1.0/sqrt(N)", "Kaiming sqrt(2/N)", "1.0 (unscaled)"):
         print(f"Variant: {key}")
         for i, n_layers in enumerate(depth_grid):
             print(
