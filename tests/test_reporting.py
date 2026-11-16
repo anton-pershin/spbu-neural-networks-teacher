@@ -165,6 +165,27 @@ def test_write_rejects_path_in_report_artifact_name(tmp_path: Path) -> None:
     assert not (tmp_path / "run").exists()
 
 
+@pytest.mark.parametrize(
+    ("report_name", "svg_size"),
+    [("figure.svg", 100), ("figure.png", 102_401)],
+)
+def test_write_rejects_report_and_figure_artifact_collision(
+    tmp_path: Path, report_name: str, svg_size: int
+) -> None:
+    report = ReportModel(
+        html_content="",
+        figures=(
+            FigureModel(figure=controlled_figure(svg_size), artifact_name="figure"),
+        ),
+        artifact_name=report_name,
+    )
+
+    with pytest.raises(ValueError, match="collides"):
+        ReportWriter(tmp_path / "run").write(report)
+
+    assert not (tmp_path / "run").exists()
+
+
 def test_write_rejects_duplicate_figure_artifact_names(tmp_path: Path) -> None:
     report = ReportModel(
         html_content="",

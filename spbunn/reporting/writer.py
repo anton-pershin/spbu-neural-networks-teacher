@@ -63,6 +63,15 @@ class ReportWriter:
                 raise ValueError(
                     f"Duplicate figure artifact name: {figure.artifact_name}"
                 )
+            possible_figure_paths = {
+                f"{figure.artifact_name}.svg",
+                f"{figure.artifact_name}.png",
+            }
+            if report.artifact_name in possible_figure_paths:
+                raise ValueError(
+                    f"Report artifact name {report.artifact_name!r} collides "
+                    f"with figure artifact stem {figure.artifact_name!r}"
+                )
             figure_names.add(figure.artifact_name)
 
     @staticmethod

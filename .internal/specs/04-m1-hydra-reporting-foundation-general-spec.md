@@ -38,7 +38,7 @@ M2, M3, and M4 depend on a common project structure and output implementation. A
 
 **NFR2. Deterministic automated checks.** Use isolated temporary directories and deterministic SVG byte sequences for boundary tests. Test below, at, and above the 102,400-byte threshold without network access.
 
-**NFR3. Defensive artifact handling.** Reject empty artifact names, path-containing artifact names, and duplicate figure artifact-name stems before writing. Ensure that rerunning a report with the same figure stem does not leave both SVG and PNG artifacts.
+**NFR3. Defensive artifact handling.** Reject empty artifact names, path-containing artifact names, duplicate figure artifact-name stems, and collisions between the HTML artifact name and either possible figure artifact name before writing. Ensure that rerunning a report with the same figure stem does not leave both SVG and PNG artifacts.
 
 **NFR4. Focused quality checks.** Format, lint, type-check, and test the new foundation code without reformatting or otherwise changing unrelated legacy experiment code.
 
@@ -52,7 +52,7 @@ M2, M3, and M4 depend on a common project structure and output implementation. A
 
 **AC4. PNG fallback (FR5).** An automated test must use an SVG representation of 102,401 bytes and verify that only the expected PNG artifact is written. A second test must verify removal of a stale artifact with the alternative extension.
 
-**AC5. Artifact validation (FR3–FR5, NFR3).** Automated tests must reject unsafe and duplicate artifact names and must confirm that multiple figures and the HTML report are written to the same run directory.
+**AC5. Artifact validation (FR3–FR5, NFR3).** Automated tests must reject unsafe, duplicate, and colliding artifact names and must confirm that multiple figures and the HTML report are written to the same run directory.
 
 **AC6. Quality and scope (NFR1–NFR4, FR7).** The complete test suite and the documented developer checks must pass. A diff review must confirm that legacy numerical behavior is unchanged and that no M2–M4 pipeline migration is included.
 

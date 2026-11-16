@@ -22,7 +22,7 @@ The dataclasses are frozen. The caller still owns each mutable Matplotlib figure
 
 `ReportWriter.write(report)` performs these operations:
 
-1. Validate all artifact names and reject duplicate figure stems before creating the run directory.
+1. Validate all artifact names and reject duplicate figure stems and HTML/figure file-name collisions before creating the run directory.
 2. Create the run directory and missing parents.
 3. Serialize each figure to an in-memory SVG representation.
 4. Write the SVG bytes when their length is at most `SVG_SIZE_THRESHOLD_BYTES` (102,400 bytes).
@@ -33,7 +33,7 @@ The dataclasses are frozen. The caller still owns each mutable Matplotlib figure
 
 Given figure stem `loss-landscape`, the result is either `loss-landscape.svg` or `loss-landscape.png`, never both after a successful rerun. The default HTML result is `report.html`; set `ReportModel.artifact_name` to use another file name.
 
-All artifact names must be non-empty file names without path components. For example, `loss-landscape` is valid, while `figures/loss-landscape` and `../loss-landscape` are invalid. This rule keeps every artifact directly in the selected run directory.
+All artifact names must be non-empty file names without path components. For example, `loss-landscape` is valid, while `figures/loss-landscape` and `../loss-landscape` are invalid. This rule keeps every artifact directly in the selected run directory. Figure stems must be unique. The HTML artifact name must also differ from every possible SVG and PNG figure file name, so an HTML write cannot overwrite a figure.
 
 ## HTML and LaTeX
 
