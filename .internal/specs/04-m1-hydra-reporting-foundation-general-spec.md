@@ -4,7 +4,7 @@
 
 #### 1.1 Spec description
 
-Implement the repository foundation required by roadmap item M1. Add the standard Hydra project metadata, common configuration groups, package and test structure, developer commands, and documentation. Add shared report models and a report writer that writes a standalone HTML report with LaTeX support and writes each Matplotlib figure as SVG or PNG in the configured run directory.
+Implement the repository foundation required by roadmap item M1. Add the standard Hydra project metadata, common configuration groups, package and test structure, developer commands, and documentation. Add shared report models and a report writer that writes a complete HTML document with LaTeX support and writes each Matplotlib figure as SVG or PNG in the configured run directory.
 
 #### 1.2 Spec motivation
 
