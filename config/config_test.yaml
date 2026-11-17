@@ -1,0 +1,9 @@
+# Foundation smoke-test configuration. Course pipelines have their own configs.
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
+
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}

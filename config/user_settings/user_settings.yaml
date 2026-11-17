@@ -1,0 +1,3 @@
+hydra_root: ${oc.env:SPBUNN_HYDRA_PATH,/tmp/spbunn_hydra}
+hydra_dir: ${user_settings.hydra_root}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+result_dir: ${user_settings.hydra_dir}
