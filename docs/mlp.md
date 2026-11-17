@@ -76,7 +76,7 @@ The manual backward formulas retain the legacy ReLU activation mask. The product
 
 The input grid contains 256 float32 points on `[-1, 1]`. For each point, autograd computes the derivative of that point's scalar network output with respect to its input by differentiating the sum of all outputs. The plain network is the existing `DeepReLUModel` with hidden width 200 and 24 layers.
 
-The legacy residual-network import is absent from the repository and its available history. M3 therefore supplies a self-contained residual network with an input Linear layer, 23 square `Linear + ReLU` residual blocks, and an output Linear layer. Each square block computes `h + ReLU(W h)` with unit branch scale. All weights use the same Kaiming-uniform initialization as the plain network. The newly deterministic producer sets Torch seed 42 and constructs the plain network before the residual network. Axis limits remain automatic.
+The legacy residual-network import is absent from the repository and its available history. M3 therefore supplies a self-contained residual network with an input Linear layer, 23 square `Linear + ReLU` residual blocks, and an output Linear layer. Each square block computes `h + ReLU(W h + b)` with unit branch scale. All weights use the same Kaiming-uniform initialization as the plain network. The newly deterministic producer sets Torch seed 42 and constructs the plain network before the residual network. Axis limits remain automatic.
 
 ## Small test configurations
 

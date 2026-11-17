@@ -422,7 +422,7 @@ def build_balduzzi_report(
             "blocks.</p>"
         ),
         (
-            r"<p>The residual blocks use \(h + \operatorname{ReLU}(Wh)\) "
+            r"<p>The residual blocks use \(h + \operatorname{ReLU}(Wh+b)\) "
             "with unit branch scale. Both networks have the configured "
             f"same width and depth. The producer uses seed {result.seed} "
             "before constructing the plain network and then the residual "

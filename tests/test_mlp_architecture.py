@@ -7,10 +7,13 @@ from spbunn.mlp.architecture import (
     ArchitectureKind,
     build_architecture_model,
     cubic_function,
+    discontinuous_function,
     evaluate_architecture_experiment,
+    gaussian_function,
     generate_dataset,
     matching_width_dim,
     parameter_count,
+    periodic_function,
     produce_depth_experiment,
     produce_width_experiment,
     step_size_for,
@@ -26,6 +29,17 @@ def test_function_regression_data_matches_legacy_grid() -> None:
     assert y.dtype == torch.float32
     assert torch.equal(x, torch.tensor([-2.0, -1.0, 0.0, 1.0, 2.0]))
     assert torch.equal(y, x**3 - x)
+
+
+def test_all_legacy_generating_function_values_are_preserved() -> None:
+    x = torch.tensor([-1.0, 0.0, 1.0])
+
+    assert torch.equal(gaussian_function(x), torch.exp(-(x**2) / 0.2))
+    assert torch.equal(discontinuous_function(x), torch.tensor([0.0, 0.0, 6.0]))
+    expected_periodic = torch.sin(2 * x) + torch.cos(8 * x) + torch.sin(16 * x)
+    assert torch.equal(periodic_function(x), expected_periodic)
+    with pytest.raises(ValueError, match="equally sized 1D tensors"):
+        periodic_function(x, amps=torch.ones(2), freqs=torch.ones(2, 1))
 
 
 def test_depth_parameter_matching_examples_are_preserved() -> None:
@@ -72,6 +86,12 @@ def test_architecture_producers_preserve_function_and_sweep_order() -> None:
     )
 
     assert [case.function_name for case in width.cases[:2]] == ["cubic", "cubic"]
+    assert [case.function_name for case in width.cases[::2]] == [
+        "cubic",
+        "gaussian",
+        "discontinuous",
+        "periodic",
+    ]
     assert [case.architecture_size for case in width.cases[:2]] == [2, 4]
     assert all(case.n_layers == 1 for case in width.cases)
     assert width.cases[0].train_x.shape == (8, 1)

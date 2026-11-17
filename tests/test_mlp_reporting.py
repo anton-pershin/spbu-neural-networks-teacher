@@ -141,7 +141,7 @@ def test_balduzzi_report_has_plain_and_residual_gradient_curves() -> None:
             assert len(axis.lines) == 1
             assert np.asarray(axis.lines[0].get_xydata()).shape == (9, 2)
         assert "summed network output" in report.html_content
-        assert r"h + \operatorname{ReLU}(Wh)" in report.html_content
+        assert r"h + \operatorname{ReLU}(Wh+b)" in report.html_content
         assert "seed 42" in report.html_content
     finally:
         _close_report(report)
