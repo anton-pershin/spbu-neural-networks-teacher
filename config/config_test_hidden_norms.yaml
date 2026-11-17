@@ -1,0 +1,23 @@
+defaults:
+  - config_hidden_norms
+  - _self_
+
+input_dim: 2
+hidden_dim: 3
+batch_size: 2
+n_seeds: 1
+depth_grid: [1, 2]
+weight_scale: 0.816496580927726
+init_sweep:
+  n_layers: 2
+  weight_scales:
+    1.0/sqrt(N): 0.5773502691896258
+    sqrt(2/N): 0.816496580927726
+    1.0 (unscaled): 1.0
+conditioning:
+  n_inputs: 1
+  n_perturbations: 1
+  perturbation_norm: 1.0e-3
+report:
+  title: Test propagation diagnostics
+  artifact_name: test_hidden_norms_propagation.html

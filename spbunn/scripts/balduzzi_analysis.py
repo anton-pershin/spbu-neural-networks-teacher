@@ -1,31 +1,31 @@
+import hydra
 import matplotlib.pyplot as plt
-import torch
-from torch.nn import functional as F
+from omegaconf import DictConfig
 
-from spbunn.mlp.simple_relu_nn import DeepReLUModel
-from spbunn.resnet.residual_connections import DeepReLUModelWithResidualConnections
-
-
-def plot_gradient_wrt_inputs(network, filename):
-    x = torch.linspace(-1, 1, 256, requires_grad=True, dtype=torch.float32)
-    output = network(x.unsqueeze(dim=1)).sum() 
-    print(output)
-    output.backward()
-    fig, ax = plt.subplots(1, 1, figsize=(5, 3))
-    ax.plot(x.detach().numpy(), x.grad.detach().numpy(), "o--", markersize=4)
-    ax.grid()
-    ax.set_xlabel(r"$x$", fontsize=12)
-    ax.set_ylabel(r"$dh / dx$", fontsize=12)
-    fig.tight_layout()
-    fig.savefig(filename)
+from spbunn.mlp.propagation import evaluate_input_gradients, produce_balduzzi_input
+from spbunn.reporting import ReportWriter
+from spbunn.reporting.mlp import build_balduzzi_report
+from spbunn.utils.common import get_config_path
 
 
-def balduzzi_analysis():
-    plain_network = DeepReLUModel(hidden_layer_dim=200, n_layers=24)
-    res_network = DeepReLUModelWithResidualConnections(hidden_layer_dim=200, n_layers=24)
-    plot_gradient_wrt_inputs(plain_network, "balduzzi_analysis_plain_network.svg")
-    plot_gradient_wrt_inputs(res_network, "balduzzi_analysis_res_network.svg")
+@hydra.main(
+    version_base="1.3",
+    config_path=str(get_config_path()),
+    config_name="config_balduzzi_analysis",
+)
+def balduzzi_analysis(cfg: DictConfig) -> None:
+    """Run plain and residual summed-output input-gradient analysis."""
+    experiment = produce_balduzzi_input(cfg)
+    results = evaluate_input_gradients(experiment)
+    report = build_balduzzi_report(
+        results, title=cfg.report.title, artifact_name=cfg.report.artifact_name
+    )
+    try:
+        ReportWriter(cfg.result_dir).write(report)
+    finally:
+        for figure in report.figures:
+            plt.close(figure.figure)
+
 
 if __name__ == "__main__":
-    balduzzi_analysis()
-
+    balduzzi_analysis()  # pylint: disable=no-value-for-parameter

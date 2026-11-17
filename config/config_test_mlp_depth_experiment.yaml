@@ -1,0 +1,20 @@
+defaults:
+  - config_mlp_depth_experiment
+  - _self_
+
+function_names: [cubic, gaussian, discontinuous, periodic]
+n_samples: 8
+hidden_layer_dim: 2
+depth_layer_grid: [1, 2]
+depth_to_plot_sequence: 2
+lr_grid: [0.01]
+step_size_fractions: [0.5]
+lr_search_epochs: 2
+lr_eval_tail_fraction: 0.5
+lr_search_seeds: [42, 43]
+output_schedule_by_epoch: [1, 2, 3]
+smoothed_loss_min_epoch: 2
+final_n_epochs: 3
+report:
+  title: Test MLP depth and convergence
+  artifact_name: test_mlp_depth_experiment.html

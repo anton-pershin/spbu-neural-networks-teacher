@@ -1,0 +1,10 @@
+defaults:
+  - config_balduzzi_analysis
+  - _self_
+
+hidden_layer_dim: 3
+n_layers: 2
+n_grid_points: 9
+report:
+  title: Test Balduzzi input-gradient analysis
+  artifact_name: test_balduzzi_analysis.html
