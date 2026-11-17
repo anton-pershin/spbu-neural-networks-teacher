@@ -134,14 +134,44 @@ def test_balduzzi_report_has_plain_and_residual_gradient_curves() -> None:
             "balduzzi_analysis_plain_network",
             "balduzzi_analysis_res_network",
         ]
-        for figure in report.figures:
+        for curve, figure in zip(result.curves, report.figures, strict=True):
             axis = figure.figure.axes[0]
             assert axis.get_xlabel() == "$x$"
             assert axis.get_ylabel() == "$dh / dx$"
             assert len(axis.lines) == 1
             assert np.asarray(axis.lines[0].get_xydata()).shape == (9, 2)
+            assert axis.get_autoscale_on()
+            assert axis.get_autoscalex_on()
+            assert axis.get_autoscaley_on()
+            assert axis.get_xlim() == pytest.approx((-1.1, 1.1))
+            gradient = curve.gradient.numpy()
+            margin = 0.05 * (float(gradient.max()) - float(gradient.min()))
+            expected_ylim = (
+                float(gradient.min()) - margin,
+                float(gradient.max()) + margin,
+            )
+            assert axis.get_ylim() == pytest.approx(expected_ylim)
         assert "summed network output" in report.html_content
-        assert r"h + \operatorname{ReLU}(Wh+b)" in report.html_content
+        assert r"h + \alpha\operatorname{ReLU}(Wh+b)" in report.html_content
+        assert r"\alpha = 1" in report.html_content
         assert "seed 42" in report.html_content
+    finally:
+        _close_report(report)
+
+
+def test_balduzzi_report_uses_configured_residual_branch_scale() -> None:
+    cfg = compose_mlp_config(
+        "config_test_balduzzi_analysis", ["residual_branch_scale=0.5"]
+    )
+    result = evaluate_input_gradients(produce_balduzzi_input(cfg))
+
+    report = build_balduzzi_report(
+        result, title=cfg.report.title, artifact_name=cfg.report.artifact_name
+    )
+
+    try:
+        assert result.residual_branch_scale == 0.5
+        assert r"\alpha = 0.5" in report.html_content
+        assert "with unit branch scale" not in report.html_content
     finally:
         _close_report(report)

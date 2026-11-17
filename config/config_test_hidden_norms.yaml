@@ -18,6 +18,19 @@ conditioning:
   n_inputs: 1
   n_perturbations: 1
   perturbation_norm: 1.0e-3
+  plain_variants:
+    - label: 1.0/sqrt(N)
+      residual: false
+      branch_scale: 1.0
+      weight_scale: 0.5773502691896258
+    - label: 1.0 (unscaled)
+      residual: false
+      branch_scale: 1.0
+      weight_scale: 1.0
+    - label: Kaiming sqrt(2/N)
+      residual: false
+      branch_scale: 1.0
+      weight_scale: ${weight_scale}
 report:
   title: Test propagation diagnostics
   artifact_name: test_hidden_norms_propagation.html

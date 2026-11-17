@@ -68,7 +68,7 @@ The production pipeline uses input width 16, hidden width 256, batch size 256, a
 
 The initialization panel compares standard deviations `1/sqrt(N)`, `sqrt(2/N)`, and `1` at depth 32. It reports mean forward pre-activation norms and backward input-adjoint norms with population-standard-deviation bands. The report explains the ReLU forward factor `N*sigma^2/2`, the Kaiming critical scale, and the zero-mean approximation limits.
 
-Conditioning evaluates depths `[1, 2, 4, 8, 16, 32, 64]`. It compares three plain initialization scales and plain/residual variants with branch scales `1`, `1/sqrt(M)`, and `1/M`. For 16 inputs and 8 normalized perturbations per input, the finite-difference sensitivity uses perturbation norm `1e-3`. Exact input-Jacobian singular values are computed separately through autograd. The condition number is the mean of per-input singular-value ratios, followed by the mean across seeds.
+Conditioning evaluates depths `[1, 2, 4, 8, 16, 32, 64]`. It compares three plain initialization scales and plain/residual variants with branch scales `1`, `1/sqrt(M)`, and `1/M`. Variant labels, residual flags, branch-scale settings, and optional weight-scale overrides are explicit in `conditioning.plain_variants` and `conditioning.residual_variants`. For 16 inputs and 8 normalized perturbations per input, the finite-difference sensitivity uses perturbation norm `1e-3`. Exact input-Jacobian singular values are computed separately through autograd. The condition number is the mean of per-input singular-value ratios, followed by the mean across seeds.
 
 The manual backward formulas retain the legacy ReLU activation mask. The production and validated configuration uses `relu`; the formulas are ReLU-specific.
 
@@ -76,7 +76,7 @@ The manual backward formulas retain the legacy ReLU activation mask. The product
 
 The input grid contains 256 float32 points on `[-1, 1]`. For each point, autograd computes the derivative of that point's scalar network output with respect to its input by differentiating the sum of all outputs. The plain network is the existing `DeepReLUModel` with hidden width 200 and 24 layers.
 
-The legacy residual-network import is absent from the repository and its available history. M3 therefore supplies a self-contained residual network with an input Linear layer, 23 square `Linear + ReLU` residual blocks, and an output Linear layer. Each square block computes `h + ReLU(W h + b)` with unit branch scale. All weights use the same Kaiming-uniform initialization as the plain network. The newly deterministic producer sets Torch seed 42 and constructs the plain network before the residual network. Axis limits remain automatic.
+The legacy residual-network import is absent from the repository and its available history. M3 therefore supplies a self-contained residual network with an input Linear layer, 23 square `Linear + ReLU` residual blocks, and an output Linear layer. Each square block computes `h + ReLU(W h + b)` with unit branch scale by default. A configured non-unit scale is applied to the residual branch and reported explicitly as `alpha`. All weights use the same Kaiming-uniform initialization as the plain network. The newly deterministic producer sets Torch seed 42 and constructs the plain network before the residual network. Axis limits remain automatic.
 
 ## Small test configurations
 

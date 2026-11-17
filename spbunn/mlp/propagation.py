@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import cast
 
@@ -31,6 +32,14 @@ CONDITIONING_METRICS = (
 
 
 @dataclass(frozen=True)
+class ConditioningVariant:
+    label: str
+    residual: bool
+    branch_scale: float
+    weight_scale: float | None
+
+
+@dataclass(frozen=True)
 class PropagationExperimentInput:
     input_dim: int
     hidden_dim: int
@@ -45,6 +54,8 @@ class PropagationExperimentInput:
     conditioning_inputs: int
     conditioning_perturbations: int
     perturbation_norm: float
+    plain_variants: tuple[ConditioningVariant, ...]
+    residual_variants: tuple[ConditioningVariant, ...]
 
 
 @dataclass(frozen=True)
@@ -53,14 +64,6 @@ class NormCurve:
     label: str
     weight_scale: float
     norms: dict[str, FloatArray]
-
-
-@dataclass(frozen=True)
-class ConditioningVariant:
-    label: str
-    residual: bool
-    branch_scale: float
-    weight_scale: float | None
 
 
 @dataclass(frozen=True)
@@ -99,6 +102,7 @@ class InputGradientCurve:
 @dataclass(frozen=True)
 class BalduzziResult:
     seed: int
+    residual_branch_scale: float
     curves: tuple[InputGradientCurve, ...]
 
 
@@ -326,6 +330,21 @@ def compute_jacobian_metrics(
     }
 
 
+def resolve_branch_scale(branch_scale: float, n_layers: int) -> float:
+    """Resolve fixed and depth-dependent residual branch-scale settings."""
+    if n_layers <= 0:
+        raise ValueError("The residual branch depth must be positive")
+    if branch_scale > 0:
+        return branch_scale
+    resolved_scale = {
+        -1.0: 1.0 / np.sqrt(n_layers),
+        -2.0: 1.0 / n_layers,
+    }.get(branch_scale)
+    if resolved_scale is None:
+        raise ValueError(f"Unsupported residual scale sentinel: {branch_scale}")
+    return resolved_scale
+
+
 def run_conditioning_experiment(
     input_dim: int,
     hidden_dim: int,
@@ -345,7 +364,11 @@ def run_conditioning_experiment(
         raise ValueError("Conditioning seeds must be non-negative and non-empty")
     if n_inputs <= 0:
         raise ValueError("The conditioning input count must be positive")
-    selected_variants = variants or (ConditioningVariant("plain", False, 1.0, None),)
+    selected_variants = (
+        (ConditioningVariant("plain", False, 1.0, None),)
+        if variants is None
+        else variants
+    )
     if not selected_variants:
         raise ValueError("At least one conditioning variant is required")
     labels = [variant.label for variant in selected_variants]
@@ -382,15 +405,9 @@ def run_conditioning_experiment(
                 if variant.branch_scale > 0:
                     model = static_models[variant.label]
                 else:
-                    resolved_scale = {
-                        -1.0: 1.0 / np.sqrt(n_layers),
-                        -2.0: 1.0 / n_layers,
-                    }.get(variant.branch_scale)
-                    if resolved_scale is None:
-                        raise ValueError(
-                            "Unsupported residual scale sentinel: "
-                            f"{variant.branch_scale}"
-                        )
+                    resolved_scale = resolve_branch_scale(
+                        variant.branch_scale, n_layers
+                    )
                     torch.manual_seed(seed)
                     model = RandomMLP(
                         input_dim=input_dim,
@@ -451,6 +468,44 @@ def run_conditioning_experiment(
     return ConditioningResult(variants=selected_variants, values=values)
 
 
+def _parse_conditioning_variants(
+    raw_variants: Iterable[DictConfig], name: str
+) -> tuple[ConditioningVariant, ...]:
+    variants = []
+    for raw_variant in raw_variants:
+        label = str(raw_variant.label)
+        branch_scale = float(raw_variant.branch_scale)
+        weight_scale = (
+            None
+            if raw_variant.weight_scale is None
+            else float(raw_variant.weight_scale)
+        )
+        if not label:
+            raise ValueError(f"{name} labels must be non-empty")
+        if not np.isfinite(branch_scale) or (
+            branch_scale <= 0 and branch_scale not in {-1.0, -2.0}
+        ):
+            raise ValueError(f"{name} contains an invalid residual branch scale")
+        if weight_scale is not None and (
+            not np.isfinite(weight_scale) or weight_scale <= 0
+        ):
+            raise ValueError(f"{name} contains an invalid weight scale")
+        variants.append(
+            ConditioningVariant(
+                label=label,
+                residual=bool(raw_variant.residual),
+                branch_scale=branch_scale,
+                weight_scale=weight_scale,
+            )
+        )
+    if not variants:
+        raise ValueError(f"{name} must not be empty")
+    labels = [variant.label for variant in variants]
+    if len(set(labels)) != len(labels):
+        raise ValueError(f"{name} labels must be unique")
+    return tuple(variants)
+
+
 def produce_propagation_input(cfg: DictConfig) -> PropagationExperimentInput:
     """Convert Hydra settings into an explicit propagation input pipe."""
     input_dim = int(cfg.input_dim)
@@ -489,6 +544,12 @@ def produce_propagation_input(cfg: DictConfig) -> PropagationExperimentInput:
         raise ValueError("Conditioning input and perturbation counts must be positive")
     if not np.isfinite(perturbation_norm) or perturbation_norm <= 0:
         raise ValueError("The perturbation norm must be finite and positive")
+    plain_variants = _parse_conditioning_variants(
+        cfg.conditioning.plain_variants, "Plain conditioning variants"
+    )
+    residual_variants = _parse_conditioning_variants(
+        cfg.conditioning.residual_variants, "Residual conditioning variants"
+    )
     return PropagationExperimentInput(
         input_dim=input_dim,
         hidden_dim=hidden_dim,
@@ -503,6 +564,8 @@ def produce_propagation_input(cfg: DictConfig) -> PropagationExperimentInput:
         conditioning_inputs=conditioning_inputs,
         conditioning_perturbations=conditioning_perturbations,
         perturbation_norm=perturbation_norm,
+        plain_variants=plain_variants,
+        residual_variants=residual_variants,
     )
 
 
@@ -535,18 +598,6 @@ def evaluate_propagation(
     plain_conditioning = None
     residual_conditioning = None
     if "conditioning" in experiment.experiments:
-        plain_variants = (
-            ConditioningVariant(
-                "1.0/sqrt(N)",
-                False,
-                1.0,
-                1.0 / np.sqrt(experiment.hidden_dim),
-            ),
-            ConditioningVariant("1.0 (unscaled)", False, 1.0, 1.0),
-            ConditioningVariant(
-                "Kaiming sqrt(2/N)", False, 1.0, experiment.weight_scale
-            ),
-        )
         plain_conditioning = run_conditioning_experiment(
             input_dim=experiment.input_dim,
             hidden_dim=experiment.hidden_dim,
@@ -557,13 +608,7 @@ def evaluate_propagation(
             n_perturbations=experiment.conditioning_perturbations,
             perturbation_norm=experiment.perturbation_norm,
             seeds=experiment.seeds,
-            variants=plain_variants,
-        )
-        residual_variants = (
-            ConditioningVariant("plain", False, 1.0, None),
-            ConditioningVariant("residual (branch x1)", True, 1.0, None),
-            ConditioningVariant("residual (branch x1/sqrt(L))", True, -1.0, None),
-            ConditioningVariant("residual (branch x1/L)", True, -2.0, None),
+            variants=experiment.plain_variants,
         )
         residual_conditioning = run_conditioning_experiment(
             input_dim=experiment.input_dim,
@@ -575,7 +620,7 @@ def evaluate_propagation(
             n_perturbations=experiment.conditioning_perturbations,
             perturbation_norm=experiment.perturbation_norm,
             seeds=experiment.seeds,
-            variants=residual_variants,
+            variants=experiment.residual_variants,
         )
     return PropagationExperimentResult(
         experiment=experiment,
@@ -684,4 +729,8 @@ def evaluate_input_gradients(experiment: BalduzziInput) -> BalduzziResult:
                 gradient=inputs.grad.detach().clone(),
             )
         )
-    return BalduzziResult(seed=experiment.seed, curves=tuple(curves))
+    return BalduzziResult(
+        seed=experiment.seed,
+        residual_branch_scale=experiment.residual_branch_scale,
+        curves=tuple(curves),
+    )

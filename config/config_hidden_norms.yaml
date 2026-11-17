@@ -25,6 +25,36 @@ conditioning:
   n_inputs: 16
   n_perturbations: 8
   perturbation_norm: 1.0e-3
+  plain_variants:
+    - label: 1.0/sqrt(N)
+      residual: false
+      branch_scale: 1.0
+      weight_scale: 0.0625
+    - label: 1.0 (unscaled)
+      residual: false
+      branch_scale: 1.0
+      weight_scale: 1.0
+    - label: Kaiming sqrt(2/N)
+      residual: false
+      branch_scale: 1.0
+      weight_scale: ${weight_scale}
+  residual_variants:
+    - label: plain
+      residual: false
+      branch_scale: 1.0
+      weight_scale: null
+    - label: residual (branch x1)
+      residual: true
+      branch_scale: 1.0
+      weight_scale: null
+    - label: residual (branch x1/sqrt(L))
+      residual: true
+      branch_scale: -1.0
+      weight_scale: null
+    - label: residual (branch x1/L)
+      residual: true
+      branch_scale: -2.0
+      weight_scale: null
 report:
   title: Hidden-norm and Jacobian propagation diagnostics
   artifact_name: hidden_norms_propagation.html

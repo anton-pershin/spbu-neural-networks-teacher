@@ -422,11 +422,12 @@ def build_balduzzi_report(
             "blocks.</p>"
         ),
         (
-            r"<p>The residual blocks use \(h + \operatorname{ReLU}(Wh+b)\) "
-            "with unit branch scale. Both networks have the configured "
-            f"same width and depth. The producer uses seed {result.seed} "
-            "before constructing the plain network and then the residual "
-            "network. Axes retain Matplotlib autoscaling.</p>"
+            r"<p>The residual blocks use "
+            r"\(h + \alpha\operatorname{ReLU}(Wh+b)\) with "
+            rf"\(\alpha = {result.residual_branch_scale:g}\). Both networks "
+            "have the same configured width and depth. The producer uses "
+            f"seed {result.seed} before constructing the plain network and "
+            "then the residual network. Axes retain Matplotlib autoscaling.</p>"
         ),
     ]
     figures = tuple(

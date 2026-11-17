@@ -6,6 +6,7 @@ import torch
 from torch import nn
 
 from spbunn.mlp.propagation import (
+    ConditioningVariant,
     DeepReLUModelWithResidualConnections,
     RandomMLP,
     compute_empirical_sensitivity,
@@ -17,6 +18,7 @@ from spbunn.mlp.propagation import (
     run_averaged_experiment,
     run_single_experiment,
 )
+from spbunn.mlp.simple_relu_nn import DeepReLUModel
 from tests.mlp_helpers import compose_mlp_config
 
 
@@ -154,6 +156,9 @@ def test_small_propagation_evaluation_has_complete_ordered_results() -> None:
         "residual (branch x1/sqrt(L))",
         "residual (branch x1/L)",
     ]
+    assert [
+        variant.branch_scale for variant in first.residual_conditioning.variants
+    ] == [1.0, 1.0, -1.0, -2.0]
     for metric in (
         "empirical_sensitivity",
         "sigma_max",
@@ -189,6 +194,17 @@ def test_production_propagation_settings_retain_legacy_values() -> None:
     assert experiment.conditioning_inputs == 16
     assert experiment.conditioning_perturbations == 8
     assert experiment.perturbation_norm == 1.0e-3
+    assert experiment.plain_variants == (
+        ConditioningVariant("1.0/sqrt(N)", False, 1.0, 0.0625),
+        ConditioningVariant("1.0 (unscaled)", False, 1.0, 1.0),
+        ConditioningVariant("Kaiming sqrt(2/N)", False, 1.0, 0.08838834764831845),
+    )
+    assert experiment.residual_variants == (
+        ConditioningVariant("plain", False, 1.0, None),
+        ConditioningVariant("residual (branch x1)", True, 1.0, None),
+        ConditioningVariant("residual (branch x1/sqrt(L))", True, -1.0, None),
+        ConditioningVariant("residual (branch x1/L)", True, -2.0, None),
+    )
 
 
 @pytest.mark.parametrize(
@@ -200,6 +216,7 @@ def test_production_propagation_settings_retain_legacy_values() -> None:
         "conditioning.n_inputs=0",
         "conditioning.n_perturbations=0",
         "conditioning.perturbation_norm=0",
+        "conditioning.residual_variants=[]",
         "activation=unsupported",
     ],
 )
@@ -259,3 +276,28 @@ def test_production_balduzzi_settings_define_missing_legacy_choices() -> None:
     assert experiment.hidden_layer_dim == 200
     assert experiment.n_layers == 24
     assert experiment.residual_branch_scale == 1.0
+    plain = experiment.plain_network
+    residual = experiment.residual_network
+    assert isinstance(plain, DeepReLUModel)
+    plain_layers = list(plain.sequential)
+    assert len(plain_layers) == 48
+    assert isinstance(plain_layers[0], nn.Linear)
+    assert plain_layers[0].in_features == 1
+    assert plain_layers[0].out_features == 200
+    assert isinstance(plain_layers[1], nn.Linear)
+    assert isinstance(plain_layers[-1], nn.Linear)
+    assert plain_layers[-1].in_features == 200
+    assert plain_layers[-1].out_features == 1
+    assert sum(isinstance(layer, nn.ReLU) for layer in plain_layers) == 23
+    assert isinstance(residual, DeepReLUModelWithResidualConnections)
+    assert residual.branch_scale == 1.0
+    assert residual.input_linear.in_features == 1
+    assert residual.input_linear.out_features == 200
+    assert residual.output_linear.in_features == 200
+    assert residual.output_linear.out_features == 1
+    assert len(residual.hidden_blocks) == 23
+    for block in residual.hidden_blocks:
+        assert isinstance(block, nn.Sequential)
+        assert isinstance(block[0], nn.Linear)
+        assert block[0].in_features == block[0].out_features == 200
+        assert isinstance(block[1], nn.ReLU)
