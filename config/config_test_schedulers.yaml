@@ -1,0 +1,7 @@
+defaults:
+  - config_schedulers
+  - _self_
+
+report:
+  title: Test learning-rate schedules
+  artifact_name: test_schedulers.html

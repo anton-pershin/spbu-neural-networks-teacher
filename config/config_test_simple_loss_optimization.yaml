@@ -1,0 +1,12 @@
+defaults:
+  - config_simple_loss_optimization
+  - _self_
+
+n_samples: 16
+grid_size: 5
+batch_size: 4
+n_epochs: 2
+n_optimization_steps: 3
+report:
+  title: Test simple loss optimization
+  artifact_name: test_simple_loss_optimization.html

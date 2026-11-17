@@ -1,0 +1,22 @@
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
+  - functions: optimization
+
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}
+
+n_samples: 1024
+grid_size: 50
+full_batch_steps: 200
+seed: 42
+batch_size: 16
+n_epochs: 24
+n_optimization_steps: 25
+training_x_min: -10.0
+training_x_max: 10.0
+report:
+  title: Simple mini-batch loss optimization
+  artifact_name: simple_loss_optimization.html

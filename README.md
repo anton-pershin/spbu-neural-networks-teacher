@@ -2,7 +2,7 @@
 
 Executable teaching materials for the Neural Networks course at SpbU. The repository uses Hydra for configuration and shared report components for HTML, SVG, and PNG outputs.
 
-> **Milestone status:** M1 provides the project and reporting foundation. The existing experiment scripts are legacy implementations. Their migration to complete HTML-reporting pipelines is planned for M2–M4.
+> **Milestone status:** M1 provides the project and reporting foundation. M2 provides the schedulers, loss-landscape, and simple loss-optimization HTML-reporting pipelines. M3 and M4 scripts remain legacy implementations.
 
 ## Repository structure
 
@@ -12,7 +12,8 @@ config/                    Hydra pipeline and common configuration
   user_settings/           Environment-specific paths
 docs/                      Component and usage documentation
 spbunn/                    Python package
-  reporting/               Shared report models and report writer
+  optimization/            Numerical filters and shared plotting helpers
+  reporting/               Report models, builders, and shared report writer
   scripts/                 Executable experiment scripts
   utils/                   Shared project utilities
 tests/                     Automated tests
@@ -57,6 +58,20 @@ hydra_dir: ${user_settings.hydra_dir}
 
 Hydra entry points can use `spbunn.utils.common.get_config_path()` as their absolute configuration path. `config/config_test.yaml` is a smoke-test configuration for the common groups; it is not a course pipeline.
 
+## Optimization pipelines
+
+Run the three M2 pipelines from a source checkout:
+
+```bash
+python -m spbunn.scripts.schedulers
+python -m spbunn.scripts.loss_landscape
+python -m spbunn.scripts.simple_loss_optimization
+```
+
+Each command writes an HTML report and its figures into `result_dir`. The default HTML names are `schedulers.html`, `loss_landscape.html`, and `simple_loss_optimization.html`. Small `config_test_*.yaml` configurations support fast automated runs.
+
+See [docs/optimization.md](docs/optimization.md) for configuration overrides, numerical behavior, figure names, and test execution.
+
 ## Reporting
 
 A report builder creates a `ReportModel`. The shared `ReportWriter` then creates the run directory, writes the figures, adds their final file names to the HTML, and writes the HTML report.
@@ -96,6 +111,6 @@ python -m pytest
 python -m build
 ```
 
-The checks cover the M1 foundation and tests. They intentionally do not reformat or lint unrelated legacy numerical modules. The tests include exact checks below, at, and above the 102,400-byte SVG threshold and verify the embedded MathJax runtime.
+The checks cover the M1 foundation, M2 optimization pipelines, and tests. They intentionally do not reformat or lint unrelated legacy numerical modules. The tests include exact checks below, at, and above the 102,400-byte SVG threshold, embedded MathJax support, numerical behavior, and end-to-end pipeline output.
 
 The GitHub Actions **CI/CD** workflow runs these checks on pushes to `main` and on pull requests. It builds the source and wheel distributions and uploads them as the `python-distributions` workflow artifact.
