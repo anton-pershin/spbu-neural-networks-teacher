@@ -1,37 +1,60 @@
-# Diagnostics of signal and gradient propagation in a randomly initialized MLP.
-# Single forward/backward pass per seed (no training), averaged over n_seeds.
-# Run: ~/venvs/spbu_nn/bin/python -m spbunn.scripts.hidden_norms_propagation
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
 
-input_dim: 16      # iid N(0,1) inputs: isotropic batch already at layer 0
-hidden_dim: 256    # N: width of every hidden layer (large N keeps the
-                   # finite-width downward drift of near-critical curves small)
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}
+
+input_dim: 16
+hidden_dim: 256
 batch_size: 256
-n_seeds: 5         # random initializations averaged (mean +- std bands)
-activation: relu   # relu | tanh
-
-# Which experiments to run: [init, conditioning]
-experiments:
-  - init
-  - conditioning
-
-# Depth grid and critical Kaiming scale for the conditioning experiment.
-# For ReLU, sigma = sqrt(2/N) gives forward factor N*sigma^2/2 = 1.
+n_seeds: 5
+activation: relu
+experiments: [init, conditioning]
 depth_grid: [1, 2, 4, 8, 16, 32, 64]
-weight_scale: 0.08838834764831845  # sqrt(2 / hidden_dim) with hidden_dim = 256
-
-# Initialization-sweep experiment: fixed depth, vary the standard deviation.
-# Per-layer forward factor = N * sigma^2 / 2 is given in the comments.
+weight_scale: 0.08838834764831845
 init_sweep:
   n_layers: 32
   weight_scales:
-    1.0/sqrt(N): 0.0625                # variance 1/N: factor 1/2
-    sqrt(2/N): 0.08838834764831845    # variance 2/N: critical (Kaiming for ReLU)
-    1.0 (unscaled): 1.0               # factor 128: strong explode
-
-# Input-Jacobian conditioning vs depth.
-# Part 1 compares subcritical, Kaiming, and unscaled plain MLPs;
-# part 2 uses the Kaiming scale with residual connections.
+    1.0/sqrt(N): 0.0625
+    sqrt(2/N): 0.08838834764831845
+    1.0 (unscaled): 1.0
 conditioning:
-  n_inputs: 16            # random inputs x per seed
-  n_perturbations: 8      # random directions dx per input
+  n_inputs: 16
+  n_perturbations: 8
   perturbation_norm: 1.0e-3
+  plain_variants:
+    - label: 1.0/sqrt(N)
+      residual: false
+      branch_scale: 1.0
+      weight_scale: 0.0625
+    - label: 1.0 (unscaled)
+      residual: false
+      branch_scale: 1.0
+      weight_scale: 1.0
+    - label: Kaiming sqrt(2/N)
+      residual: false
+      branch_scale: 1.0
+      weight_scale: ${weight_scale}
+  residual_variants:
+    - label: plain
+      residual: false
+      branch_scale: 1.0
+      weight_scale: null
+    - label: residual (branch x1)
+      residual: true
+      branch_scale: 1.0
+      weight_scale: null
+    - label: residual (branch x1/sqrt(L))
+      residual: true
+      branch_scale: -1.0
+      weight_scale: null
+    - label: residual (branch x1/L)
+      residual: true
+      branch_scale: -2.0
+      weight_scale: null
+report:
+  title: Hidden-norm and Jacobian propagation diagnostics
+  artifact_name: hidden_norms_propagation.html

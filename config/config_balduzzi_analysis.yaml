@@ -1,0 +1,18 @@
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
+
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}
+
+seed: 42
+hidden_layer_dim: 200
+n_layers: 24
+residual_branch_scale: 1.0
+n_grid_points: 256
+x_lims: [-1.0, 1.0]
+report:
+  title: Balduzzi input-gradient analysis
+  artifact_name: balduzzi_analysis.html

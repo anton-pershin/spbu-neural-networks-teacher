@@ -1,0 +1,16 @@
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
+  - mlp: architecture
+
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}
+
+hidden_layer_dim: 8
+depth_layer_grid: [1, 2, 4, 8, 16, 32]
+depth_to_plot_sequence: 32
+report:
+  title: MLP depth and convergence
+  artifact_name: mlp_depth_experiment.html

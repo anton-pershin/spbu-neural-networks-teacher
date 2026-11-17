@@ -1,0 +1,15 @@
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
+  - mlp: architecture
+
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}
+
+hidden_layer_dims: [8, 16, 32, 64, 128, 256, 512, 1024]
+sequence_hidden_layer_dim: 1024
+report:
+  title: MLP width and convergence
+  artifact_name: mlp_width_experiment.html
