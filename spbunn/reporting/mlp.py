@@ -12,8 +12,10 @@ from spbunn.mlp.architecture import (
 from spbunn.mlp.propagation import (
     BalduzziResult,
     ConditioningResult,
+    ConditioningVariant,
     InputGradientCurve,
     NormCurve,
+    PropagationExperimentInput,
     PropagationExperimentResult,
 )
 from spbunn.reporting.models import FigureModel, ReportModel
@@ -268,6 +270,122 @@ def _conditioning_figure(
     return FigureModel(figure=figure, artifact_name=stem)
 
 
+def _ordered_conditioning_variants(
+    result: ConditioningResult, legacy_order: tuple[str, ...]
+) -> tuple[ConditioningVariant, ...]:
+    rank = {label: index for index, label in enumerate(legacy_order)}
+    # Python's stable sort retains configuration order for custom variants.
+    return tuple(
+        sorted(
+            result.variants,
+            key=lambda variant: rank.get(variant.label, len(rank)),
+        )
+    )
+
+
+def _branch_scale_math(branch_scale: float) -> str:
+    if branch_scale == -1.0:
+        return r"1/\sqrt{M}"
+    if branch_scale == -2.0:
+        return "1/M"
+    return f"{branch_scale:g}"
+
+
+def _plain_conditioning_entries(
+    result: ConditioningResult, experiment: PropagationExperimentInput
+) -> tuple[tuple[str, str], ...]:
+    legacy_order = (
+        "1.0/sqrt(N)",
+        "Kaiming sqrt(2/N)",
+        "1.0 (unscaled)",
+    )
+    labels = {
+        "1.0/sqrt(N)": r"$\sigma^2 = 1/N$",
+        "Kaiming sqrt(2/N)": r"$\sigma^2 = 2/N$ (Kaiming)",
+        "1.0 (unscaled)": r"$\sigma^2 = 1$",
+    }
+    expected_scales = {
+        "1.0/sqrt(N)": 1.0 / np.sqrt(experiment.hidden_dim),
+        "Kaiming sqrt(2/N)": experiment.weight_scale,
+        "1.0 (unscaled)": 1.0,
+    }
+    entries = []
+    for variant in _ordered_conditioning_variants(result, legacy_order):
+        weight_scale = (
+            experiment.weight_scale
+            if variant.weight_scale is None
+            else variant.weight_scale
+        )
+        label = labels.get(variant.label)
+        if label is None or not np.isclose(
+            weight_scale, expected_scales[variant.label]
+        ):
+            label = rf"{variant.label} ($\sigma={weight_scale:g}$)"
+        entries.append((variant.label, label))
+    return tuple(entries)
+
+
+def _residual_conditioning_entries(
+    result: ConditioningResult,
+) -> tuple[tuple[str, str], ...]:
+    legacy_order = (
+        "plain",
+        "residual (branch x1)",
+        "residual (branch x1/sqrt(L))",
+        "residual (branch x1/L)",
+    )
+    labels = {
+        ("residual (branch x1)", 1.0): r"residual, branch $\times 1$",
+        ("residual (branch x1/sqrt(L))", -1.0): (
+            r"residual, branch $\times 1/\sqrt{M}$"
+        ),
+        ("residual (branch x1/L)", -2.0): r"residual, branch $\times 1/M$",
+    }
+    entries = []
+    for variant in _ordered_conditioning_variants(result, legacy_order):
+        label: str | None
+        if not variant.residual:
+            label = variant.label
+        else:
+            label = labels.get((variant.label, variant.branch_scale))
+            if label is None:
+                scale = _branch_scale_math(variant.branch_scale)
+                label = rf"{variant.label} (branch ${scale}$)"
+        entries.append((variant.label, label))
+    return tuple(entries)
+
+
+def _conditioning_variant_list(result: ConditioningResult) -> str:
+    items = []
+    for variant in result.variants:
+        weight_scale = (
+            "default" if variant.weight_scale is None else f"{variant.weight_scale:g}"
+        )
+        items.append(
+            f"<li><code>{escape(variant.label)}</code>: "
+            f"residual={str(variant.residual).lower()}, "
+            f"branch scale={variant.branch_scale:g}, "
+            f"weight scale={weight_scale}.</li>"
+        )
+    return "<ul>" + "".join(items) + "</ul>"
+
+
+def _residual_scale_explanation(result: ConditioningResult | None) -> str:
+    if result is None:
+        return ""
+    scales = tuple(
+        dict.fromkeys(
+            _branch_scale_math(variant.branch_scale)
+            for variant in result.variants
+            if variant.residual
+        )
+    )
+    if not scales:
+        return "No residual branch is configured in the residual panel."
+    rendered_scales = ", ".join(rf"\({scale}\)" for scale in scales)
+    return f"Configured residual branch scales are {rendered_scales}."
+
+
 def build_hidden_norms_report(
     result: PropagationExperimentResult, title: str, artifact_name: str
 ) -> ReportModel:
@@ -282,30 +400,57 @@ def build_hidden_norms_report(
             r"Curves are averaged over the configured seeds "
             rf"{experiment.seeds}.</p>"
         ),
-        "<h2>Initialization and norm propagation</h2>",
-        (
-            r"<p>For zero-bias ReLU networks, the documented theory gives "
-            r"\(E\|h_l\|^2 = d(H\sigma^2/2)^l\). The forward factor is "
-            r"\(H\sigma^2/2\), so Kaiming initialization "
-            r"\(\sigma^2=2/H\) makes it one. The backward factor contains "
-            r"the finite-width \(H+1\) correction and compounds over the "
-            r"remaining layers. These are zero-mean approximations: positive "
-            r"ReLU means shift empirical curves near criticality. Bands show "
-            r"the population standard deviation across seeds.</p>"
-        ),
-        "<h2>Empirical sensitivity and exact conditioning</h2>",
-        (
-            r"<p>Finite differences measure "
-            r"\(\|f_M(x+\Delta x)-f_M(x)\|_2/\|\Delta x\|_2\). "
-            rf"The perturbation norm is {experiment.perturbation_norm:g}. "
-            r"Autograd separately computes the exact input Jacobian "
-            r"\(J_M=dh_M/dx\). The condition number is "
-            r"\(\sigma_{\max}(J_M)/\sigma_{\min}(J_M)\); the report averages "
-            r"the mean of per-input ratios, not the ratio of mean singular "
-            r"values. Residual branches use scales \(1\), \(1/\sqrt{M}\), "
-            r"and \(1/M\).</p>"
-        ),
     ]
+    if result.init_curves:
+        sections.extend(
+            [
+                "<h2>Initialization and norm propagation</h2>",
+                (
+                    r"<p>For zero-bias ReLU networks, the documented theory gives "
+                    r"\(E\|h_l\|^2 = d(H\sigma^2/2)^l\). The forward factor is "
+                    r"\(H\sigma^2/2\), so Kaiming initialization "
+                    r"\(\sigma^2=2/H\) makes it one. The backward factor contains "
+                    r"the finite-width \(H+1\) correction and compounds over the "
+                    r"remaining layers. These are zero-mean approximations: positive "
+                    r"ReLU means shift empirical curves near criticality. Bands show "
+                    r"the population standard deviation across seeds.</p>"
+                ),
+            ]
+        )
+    if (
+        result.plain_conditioning is not None
+        or result.residual_conditioning is not None
+    ):
+        sections.extend(
+            [
+                "<h2>Empirical sensitivity and exact conditioning</h2>",
+                (
+                    r"<p>Finite differences measure "
+                    r"\(\|f_M(x+\Delta x)-f_M(x)\|_2/\|\Delta x\|_2\). "
+                    rf"The perturbation norm is {experiment.perturbation_norm:g}. "
+                    r"Autograd separately computes the exact input Jacobian "
+                    r"\(J_M=dh_M/dx\). The condition number is "
+                    r"\(\sigma_{\max}(J_M)/\sigma_{\min}(J_M)\); the report averages "
+                    r"the mean of per-input ratios, not the ratio of mean singular "
+                    r"values.</p>"
+                ),
+                f"<p>{_residual_scale_explanation(result.residual_conditioning)}</p>",
+            ]
+        )
+        if result.plain_conditioning is not None:
+            sections.extend(
+                [
+                    "<h3>Configured plain conditioning variants</h3>",
+                    _conditioning_variant_list(result.plain_conditioning),
+                ]
+            )
+        if result.residual_conditioning is not None:
+            sections.extend(
+                [
+                    "<h3>Configured residual conditioning variants</h3>",
+                    _conditioning_variant_list(result.residual_conditioning),
+                ]
+            )
     figures = []
     activation = experiment.activation
     if result.init_curves:
@@ -326,10 +471,8 @@ def build_hidden_norms_report(
             ]
         )
     if result.plain_conditioning is not None:
-        plain_entries = (
-            ("1.0/sqrt(N)", r"$\sigma^2 = 1/N$"),
-            ("Kaiming sqrt(2/N)", r"$\sigma^2 = 2/N$ (Kaiming)"),
-            ("1.0 (unscaled)", r"$\sigma^2 = 1$"),
+        plain_entries = _plain_conditioning_entries(
+            result.plain_conditioning, experiment
         )
         figures.extend(
             [
@@ -352,15 +495,7 @@ def build_hidden_norms_report(
             ]
         )
     if result.residual_conditioning is not None:
-        residual_entries = (
-            ("plain", "plain"),
-            ("residual (branch x1)", r"residual, branch $\times 1$"),
-            (
-                "residual (branch x1/sqrt(L))",
-                r"residual, branch $\times 1/\sqrt{M}$",
-            ),
-            ("residual (branch x1/L)", r"residual, branch $\times 1/M$"),
-        )
+        residual_entries = _residual_conditioning_entries(result.residual_conditioning)
         figures.extend(
             [
                 _conditioning_figure(

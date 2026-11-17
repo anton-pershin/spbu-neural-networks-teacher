@@ -111,6 +111,17 @@ def test_hidden_norms_report_has_six_ordered_diagnostic_figures() -> None:
         assert axes[3].get_ylabel() == "input-Jacobian condition number"
         assert len(axes[0].lines) == 3
         assert len(axes[4].lines) == 4
+        assert [line.get_label() for line in axes[2].lines] == [
+            r"$\sigma^2 = 1/N$",
+            r"$\sigma^2 = 2/N$ (Kaiming)",
+            r"$\sigma^2 = 1$",
+        ]
+        assert [line.get_label() for line in axes[4].lines] == [
+            "plain",
+            r"residual, branch $\times 1$",
+            r"residual, branch $\times 1/\sqrt{M}$",
+            r"residual, branch $\times 1/M$",
+        ]
         assert r"H\sigma^2/2" in report.html_content
         assert "zero-mean approximations" in report.html_content
         assert "mean of per-input ratios" in report.html_content

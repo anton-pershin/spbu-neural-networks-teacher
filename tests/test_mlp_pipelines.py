@@ -100,6 +100,35 @@ def test_executable_mlp_pipelines_write_complete_reports_in_run_directory(
     )
 
 
+def test_hidden_pipeline_reports_custom_conditioning_variants(tmp_path: Path) -> None:
+    cfg = compose_mlp_config(
+        "config_test_hidden_norms",
+        [
+            "experiments=[conditioning]",
+            (
+                "conditioning.plain_variants=[{label:custom_plain,"
+                "residual:false,branch_scale:1.0,weight_scale:0.2}]"
+            ),
+            (
+                "conditioning.residual_variants=[{label:custom_residual,"
+                "residual:true,branch_scale:0.5,weight_scale:null}]"
+            ),
+            f"result_dir={tmp_path}",
+        ],
+    )
+
+    hidden_norms_propagation(cfg)
+
+    html = (tmp_path / "test_hidden_norms_propagation.html").read_text(encoding="utf-8")
+    assert len(re.findall(r'<img src="([^"]+)"', html)) == 4
+    assert "custom_plain" in html
+    assert "custom_residual" in html
+    assert "branch scale=0.5" in html
+    assert r"Configured residual branch scales are \(0.5\)." in html
+    assert "Initialization and norm propagation" not in html
+    assert not plt.get_fignums()
+
+
 @pytest.mark.parametrize(("entry_point", "config_name"), ENTRY_POINT_CASES)
 def test_mlp_orchestrators_close_figures_after_success(
     tmp_path: Path, entry_point: object, config_name: str
