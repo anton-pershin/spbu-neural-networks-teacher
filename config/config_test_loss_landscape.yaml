@@ -1,0 +1,10 @@
+defaults:
+  - config_loss_landscape
+  - _self_
+
+n_samples: 16
+grid_size: 5
+full_batch_steps: 2
+report:
+  title: Test loss landscapes
+  artifact_name: test_loss_landscape.html

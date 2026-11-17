@@ -4,7 +4,7 @@
 
 The reporting package separates pipeline-specific content from artifact persistence. Producers and transformers compute experiment results. A report builder converts those results into a report model. `ReportWriter` is the single component that writes the HTML report and its figures.
 
-M1 does not connect the legacy experiment scripts to this interface. That work belongs to M2–M4.
+M1 provides this interface. M2 connects the three optimization scripts to it. Migration of the remaining M3 and M4 scripts is outside that scope.
 
 ## Models
 
