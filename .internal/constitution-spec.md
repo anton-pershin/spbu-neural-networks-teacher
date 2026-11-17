@@ -172,7 +172,7 @@ Producers only generate or load experiment input. Transformers only compute nume
 | M1 | Hydra and reporting foundation | Done | The repository has the Hydra-based package, configuration, test, and documentation structure; shared report models and the report writer satisfy the run-directory and SVG/PNG output contract, with automated threshold tests. |
 | M2 | Optimization pipelines | Done | `schedulers.py`, `loss_landscape.py`, and `simple_loss_optimization.py` run as Hydra-configured pipelines and produce complete HTML reports and figures through the shared components. |
 | M3 | MLP architecture and propagation pipelines | Done | `mlp_width_experiment.py`, `mlp_depth_experiment.py`, `hidden_norms_propagation.py`, and `balduzzi_analysis.py` run as Hydra-configured pipelines and produce complete HTML reports and figures through the shared components. |
-| M4 | Convolution pipeline | To do | `simple_convolution.py` runs as a Hydra-configured pipeline and produces a complete HTML report and figures through the shared components. |
+| M4 | Convolution pipeline | Done | `simple_convolution.py` runs as a Hydra-configured pipeline and produces a complete HTML report and figures through the shared components. |
 
 M2, M3, and M4 may proceed concurrently after M1.
 

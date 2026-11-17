@@ -1,0 +1,9 @@
+defaults:
+  - config_simple_convolution
+  - _self_
+
+kernel_size: 3
+n_repetitions: 2
+report:
+  title: Test simple repeated convolution
+  artifact_name: test_simple_convolution.html
