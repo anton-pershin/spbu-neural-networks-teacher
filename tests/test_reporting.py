@@ -1,3 +1,5 @@
+import re
+from importlib.resources import files
 from io import BytesIO
 from pathlib import Path
 from typing import cast
@@ -53,7 +55,16 @@ def test_write_creates_html_with_latex_support_and_figure(tmp_path: Path) -> Non
     assert r"<p>Linear relation \(y = x\).</p>" in html
     assert "<title>Example &lt;report&gt;</title>" in html
     assert "window.MathJax" in html
-    assert "mathjax@3/es5/tex-mml-chtml.js" in html
+    mathjax_runtime = (
+        files("spbunn.reporting.static")
+        .joinpath("tex-svg-full.js")
+        .read_text(encoding="utf-8")
+    )
+    assert html.count(mathjax_runtime) == 1
+    assert 'id="mathjax-runtime"' in html
+    assert "options: {enableMenu: false}" in html
+    assert re.search(r"<script\b[^>]*\bsrc=", html) is None
+    assert "cdn.jsdelivr.net/npm/mathjax" not in html
     assert '<img src="line.svg"' in html
     assert (run_directory / "line.svg").is_file()
     assert not (run_directory / "line.png").exists()

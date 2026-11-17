@@ -1,4 +1,4 @@
-name: Python application
+name: CI/CD
 
 on:
   push:
@@ -29,3 +29,9 @@ jobs:
         run: python -m pytest
       - name: Build package
         run: python -m build
+      - name: Upload package distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-distributions
+          path: dist/
+          if-no-files-found: error

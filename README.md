@@ -84,7 +84,7 @@ def write_example(cfg: DictConfig) -> None:
 
 The default HTML artifact name is `report.html`. Figure artifact names are stems without a directory or extension. The writer selects `.svg` when the serialized SVG size is at most 102,400 bytes; otherwise, it selects `.png`. It never keeps both formats for the same stem after a rerun.
 
-MathJax supplies LaTeX rendering. The generated HTML loads MathJax from its CDN, so a browser needs network access to render the notation.
+MathJax supplies LaTeX rendering without network access. Each HTML report embeds the pinned MathJax 3.2.2 full SVG runtime, including its glyph paths. It needs no external MathJax script, CDN, or web font. The embedded runtime adds approximately 2.3 MB to each HTML report. Source and license details are in `spbunn/reporting/static/README.md`.
 
 See [docs/reporting.md](docs/reporting.md) for the complete interface and artifact rules.
 
@@ -96,4 +96,6 @@ python -m pytest
 python -m build
 ```
 
-The checks cover the M1 foundation and tests. They intentionally do not reformat or lint unrelated legacy numerical modules. The tests include exact checks below, at, and above the 102,400-byte SVG threshold.
+The checks cover the M1 foundation and tests. They intentionally do not reformat or lint unrelated legacy numerical modules. The tests include exact checks below, at, and above the 102,400-byte SVG threshold and verify the embedded MathJax runtime.
+
+The GitHub Actions **CI/CD** workflow runs these checks on pushes to `main` and on pull requests. It builds the source and wheel distributions and uploads them as the `python-distributions` workflow artifact.

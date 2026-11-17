@@ -18,13 +18,13 @@ M2, M3, and M4 depend on a common project structure and output implementation. A
 
 #### 2.1 Functional requirements
 
-**FR1. Hydra repository foundation.** Follow the `hydra-repo` layout for Python packaging, runtime and development dependencies, common Hydra settings, executable-script support utilities, tests, documentation, and developer checks. Preserve the existing experiment implementations and their pipeline-specific configuration files.
+**FR1. Hydra repository foundation.** Follow the `hydra-repo` layout for Python packaging, runtime and development dependencies, common Hydra settings, executable-script support utilities, tests, documentation, and developer checks. Provide a GitHub Actions CI/CD workflow that runs these checks and tests, builds package distributions, and stores them as workflow artifacts. Preserve the existing experiment implementations and their pipeline-specific configuration files.
 
 **FR2. Common run-directory configuration.** Provide reusable Hydra settings for the run directory and job logging. Use an environment variable with a documented local default for the user-specific Hydra root. Provide a utility that returns the repository configuration path to Hydra entry points.
 
 **FR3. Shared report models.** Represent a report with HTML content, an HTML artifact name, a title, and zero or more figures. Represent each figure with its Matplotlib figure object and an artifact-name stem. The models must not perform file output.
 
-**FR4. HTML report output.** The report writer must receive the run directory explicitly, create it when necessary, and write a UTF-8 HTML artifact there. The generated document must include the report content, its figures, and MathJax support for LaTeX notation.
+**FR4. HTML report output.** The report writer must receive the run directory explicitly, create it when necessary, and write a UTF-8 HTML artifact there. The generated document must include the report content, its figures, and MathJax support for LaTeX notation. Embed the complete MathJax runtime in each HTML artifact so mathematical rendering requires no CDN, external script, or web font.
 
 **FR5. Figure format selection.** For each figure, serialize its SVG representation and measure its size in bytes. Write the SVG artifact when the size is at most 102,400 bytes. Write a PNG artifact instead when the size is greater than 102,400 bytes. Use the figure model's artifact-name stem and write no figure artifact outside the run directory.
 
@@ -42,11 +42,13 @@ M2, M3, and M4 depend on a common project structure and output implementation. A
 
 **NFR4. Focused quality checks.** Format, lint, type-check, and test the new foundation code without reformatting or otherwise changing unrelated legacy experiment code.
 
+**NFR5. Vendored MathJax provenance.** Pin the MathJax version and record its source, checksums, and license with the packaged resource. Use the full SVG renderer to include TeX extensions and glyph paths without runtime font downloads. Disable the optional MathJax menu to prevent optional component downloads.
+
 ### 3. Acceptance criteria
 
-**AC1. Repository foundation (FR1, FR2, FR6).** Automated tests must locate the repository configuration directory and compose the common Hydra run-directory settings with a test configuration. Project metadata, dependency files, developer commands, tests, and documentation must exist and describe the implemented behavior.
+**AC1. Repository foundation (FR1, FR2, FR6).** Automated tests must locate the repository configuration directory and compose the common Hydra run-directory settings with a test configuration. Project metadata, dependency files, developer commands, tests, documentation, and the CI/CD workflow must exist and describe the implemented behavior. A successful workflow run must include test, static-check, package-build, and distribution-artifact evidence.
 
-**AC2. HTML output (FR3, FR4).** An automated test must write a report into a new nested temporary run directory and verify that the configured HTML artifact exists there. Its contents must include the supplied report body, the figure reference when a figure is present, and MathJax LaTeX support.
+**AC2. HTML output (FR3, FR4, NFR5).** An automated test must write a report into a new nested temporary run directory and verify that the configured HTML artifact exists there. Its contents must include the supplied report body and the figure reference when a figure is present. The test must also verify that the packaged MathJax runtime is embedded exactly once, that no script has an external source, and that optional MathJax menu downloads are disabled.
 
 **AC3. SVG boundary (FR5).** Automated tests must use SVG representations of 102,399 and 102,400 bytes and verify that only the expected SVG artifact is written in each case.
 
@@ -54,9 +56,9 @@ M2, M3, and M4 depend on a common project structure and output implementation. A
 
 **AC5. Artifact validation (FR3–FR5, NFR3).** Automated tests must reject unsafe, duplicate, and colliding artifact names and must confirm that multiple figures and the HTML report are written to the same run directory.
 
-**AC6. Quality and scope (NFR1–NFR4, FR7).** The complete test suite and the documented developer checks must pass. A diff review must confirm that legacy numerical behavior is unchanged and that no M2–M4 pipeline migration is included.
+**AC6. Quality and scope (NFR1–NFR5, FR7).** The complete test suite and the documented developer checks must pass. A diff review must confirm that legacy numerical behavior is unchanged and that no M2–M4 pipeline migration is included.
 
-**AC7. Human review.** A human reviewer must inspect the report-writer interface and a generated report for correct HTML content, LaTeX support, and figure presentation. Human review remains necessary; automated checks alone do not establish acceptance.
+**AC7. Human review.** A human reviewer must inspect the report-writer interface and a generated report for correct HTML content, LaTeX support, and figure presentation. The reviewer must open the report with network access disabled and confirm that LaTeX renders. Human review remains necessary; automated checks alone do not establish acceptance.
 
 ### 4. High-level solution design
 
@@ -67,7 +69,7 @@ flowchart LR
   B["Future pipeline report builders<br/>M2–M4; unchanged"] -- "Report model" --> W["Shared report writer<br/>NEW"]
   M["Shared report models<br/>NEW"] -- "HTML, figures, artifact names" --> W
   H["Common Hydra settings<br/>NEW"] -- "Run directory" --> W
-  W -- "UTF-8 HTML + MathJax" --> R["HTML report"]
+  W -- "UTF-8 HTML + embedded MathJax SVG" --> R["Self-contained HTML report"]
   W -- "Serialize and measure SVG" --> D{"At most 102,400 bytes?"}
   D -- "Yes" --> S["SVG artifact"]
   D -- "No" --> P["PNG artifact only"]
@@ -86,4 +88,4 @@ flowchart TD
   class M1 current;
 ```
 
-At component level, `ReportModel` contains immutable figure entries and document metadata. `ReportWriter` validates artifact names, serializes and stores figures, inserts their final file names into the generated HTML, and writes the HTML artifact. It returns the HTML artifact path for callers and tests. Matplotlib figures remain owned by the caller; the writer does not close them or perform experiment work.
+At component level, `ReportModel` contains immutable figure entries and document metadata. `ReportWriter` validates artifact names, serializes and stores figures, inserts their final file names into the generated HTML, and writes the HTML artifact. It embeds the pinned MathJax full SVG runtime from `spbunn.reporting.static`; this makes LaTeX rendering independent of external scripts and fonts. It returns the HTML artifact path for callers and tests. Matplotlib figures remain owned by the caller; the writer does not close them or perform experiment work.

@@ -1,4 +1,5 @@
 from html import escape
+from importlib.resources import files
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import quote
@@ -89,7 +90,18 @@ class ReportWriter:
             )
 
     @staticmethod
+    def _load_mathjax_runtime() -> str:
+        runtime = (
+            files("spbunn.reporting.static")
+            .joinpath("tex-svg-full.js")
+            .read_text(encoding="utf-8")
+        )
+        # Keep a future vendor update from terminating the HTML script element.
+        return runtime.replace("</script", "<\\/script")
+
+    @staticmethod
     def _render_html(report: ReportModel, figure_markup: str) -> str:
+        mathjax_runtime = ReportWriter._load_mathjax_runtime()
         return "\n".join(
             [
                 "<!doctype html>",
@@ -107,14 +119,13 @@ class ReportWriter:
                 "  </style>",
                 "  <script>",
                 "    window.MathJax = {",
-                '      tex: {inlineMath: [["\\\\(", "\\\\)"], ["$", "$"]]}',
+                '      tex: {inlineMath: [["\\\\(", "\\\\)"], ["$", "$"]]},',
+                "      options: {enableMenu: false}",
                 "    };",
                 "  </script>",
-                (
-                    "  <script defer "
-                    'src="https://cdn.jsdelivr.net/npm/mathjax@3/'
-                    'es5/tex-mml-chtml.js"></script>'
-                ),
+                '  <script id="mathjax-runtime">',
+                mathjax_runtime,
+                "  </script>",
                 "</head>",
                 "<body>",
                 "  <main>",

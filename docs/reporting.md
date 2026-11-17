@@ -29,7 +29,8 @@ The dataclasses are frozen. The caller still owns each mutable Matplotlib figure
 5. Write only a PNG instead when the SVG is larger than the threshold.
 6. Remove a stale artifact with the alternative extension for the same figure stem.
 7. Add an image element with the selected file name to the HTML body.
-8. Write the HTML as UTF-8 and return its `Path`.
+8. Embed the packaged MathJax runtime and write the HTML as UTF-8.
+9. Return the HTML artifact's `Path`.
 
 Given figure stem `loss-landscape`, the result is either `loss-landscape.svg` or `loss-landscape.png`, never both after a successful rerun. The default HTML result is `report.html`; set `ReportModel.artifact_name` to use another file name.
 
@@ -39,7 +40,9 @@ All artifact names must be non-empty file names without path components. For exa
 
 The writer creates a complete HTML document with a UTF-8 charset, responsive image styling, the supplied body, and figure elements. It configures MathJax for inline notation delimited by `\(...\)` or `$...$`. Standard MathJax display notation is also available.
 
-The HTML references the MathJax 3 CDN at `cdn.jsdelivr.net`. No network access is needed to generate or test the file, but network access is needed for MathJax rendering in a browser.
+The HTML embeds MathJax 3.2.2 directly in a script element. No script has an external `src` attribute. The full TeX-to-SVG component includes the standard TeX extensions and writes mathematical notation as SVG glyph paths, so rendering needs no external MathJax script, CDN, or web font. The optional MathJax menu is disabled to prevent optional component downloads. Reports and mathematical notation therefore render while browser network access is disabled.
+
+Self-contained mathematical rendering adds approximately 2.3 MB to every HTML report. The vendored runtime is unmodified. Its source archive, checksums, update procedure, and license are recorded in `spbunn/reporting/static/README.md` and `spbunn/reporting/static/MathJax-LICENSE`.
 
 ## Example
 
@@ -78,7 +81,7 @@ This example creates `index.html` and normally `quadratic.svg` in `/tmp/spbunn_h
 
 ## Tests
 
-`tests/test_reporting.py` uses temporary run directories. Controlled figure doubles provide exact SVG sizes of 102,399, 102,400, and 102,401 bytes. A real Matplotlib figure checks integration with HTML generation. Other tests cover multiple figures, stale-format removal, and invalid or duplicate artifact names.
+`tests/test_reporting.py` uses temporary run directories. Controlled figure doubles provide exact SVG sizes of 102,399, 102,400, and 102,401 bytes. A real Matplotlib figure checks integration with HTML generation. The HTML test verifies exact inclusion of the packaged MathJax runtime, the absence of script sources, and disabled optional MathJax menu downloads. Other tests cover multiple figures, stale-format removal, and invalid, duplicate, or colliding artifact names.
 
 Run all checks from the repository root:
 
