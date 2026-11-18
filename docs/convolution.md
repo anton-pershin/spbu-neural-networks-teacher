@@ -11,15 +11,21 @@ The pipeline needs two input images:
 - `images.rgb` selects the image for the horizontal and vertical experiments. The reader selects RGB mode, so an alpha channel is discarded.
 - `images.grayscale` selects the image for the diagonal experiment. The reader selects one-channel grayscale mode.
 
-The production defaults retain the legacy names `climate_change.png` and `waves.png`. These image assets are not stored in the repository. Set both paths on the command line or in a configuration overlay:
+The production defaults retain the legacy names `climate_change.png` and `waves.png`. Both supplied PNG files are stored at the repository root. From the source-checkout root, run the pipeline with these defaults:
+
+```bash
+python -m spbunn.scripts.simple_convolution
+```
+
+To use other images, set either or both paths on the command line or in a configuration overlay:
 
 ```bash
 python -m spbunn.scripts.simple_convolution \
-  images.rgb=/path/to/climate_change.png \
-  images.grayscale=/path/to/waves.png
+  images.rgb=/path/to/rgb.png \
+  images.grayscale=/path/to/grayscale.png
 ```
 
-Absolute paths are supported. Relative paths are resolved from the directory in which the command was originally invoked, including when Hydra changes its job directory. To select an explicit report directory, set both common output values:
+Absolute paths are supported. Relative paths, including the defaults, are resolved from the directory in which the command was originally invoked, including when Hydra changes its job directory. To select an explicit report directory, set both common output values:
 
 ```bash
 python -m spbunn.scripts.simple_convolution \
@@ -56,7 +62,7 @@ The shared writer selects SVG when the serialized SVG size is at most 102,400 by
 
 ## Small test configuration
 
-`config/config_test_simple_convolution.yaml` uses 3-by-3 kernels and two repetitions. It does not include image assets, so command-line use still requires both input-path overrides. Automated tests generate small RGBA and grayscale PNG files in temporary directories and supply those paths explicitly.
+`config/config_test_simple_convolution.yaml` uses 3-by-3 kernels and two repetitions with the same configurable image defaults. Automated numerical and pipeline tests generate small RGBA and grayscale PNG files in temporary directories and supply those paths explicitly. The production-settings review run uses the repository-default PNG files.
 
 Run all local checks:
 

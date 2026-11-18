@@ -91,15 +91,21 @@ See [docs/mlp.md](docs/mlp.md) for configuration overrides, numerical behavior, 
 
 ## Convolution pipeline
 
-Run the M4 pipeline with configured RGB and grayscale input images:
+Run the M4 pipeline from the source-checkout root:
+
+```bash
+python -m spbunn.scripts.simple_convolution
+```
+
+This uses the repository's default `climate_change.png` for the horizontal and vertical kernels and `waves.png` for the diagonal kernel. Both paths remain configurable:
 
 ```bash
 python -m spbunn.scripts.simple_convolution \
-  images.rgb=/path/to/climate_change.png \
-  images.grayscale=/path/to/waves.png
+  images.rgb=/path/to/rgb.png \
+  images.grayscale=/path/to/grayscale.png
 ```
 
-The default input names are `climate_change.png` and `waves.png`; these assets are not included in the repository. Relative paths are resolved from the original invocation directory. The command writes `simple_convolution.html` and the horizontal, vertical, and diagonal convolution figures into `result_dir`.
+Relative override paths are resolved from the original invocation directory. The command writes `simple_convolution.html` and the horizontal, vertical, and diagonal convolution figures into `result_dir`.
 
 See [docs/convolution.md](docs/convolution.md) for input and output overrides, numerical behavior, figure names, the small test configuration, and test execution.
 

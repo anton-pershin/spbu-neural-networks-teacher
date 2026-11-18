@@ -11,6 +11,7 @@ from spbunn.convolution import (
     evaluate_convolutions,
     produce_convolution_inputs,
 )
+from spbunn.utils.common import get_project_path
 from tests.convolution_helpers import (
     compose_convolution_config,
     write_convolution_input_images,
@@ -134,6 +135,8 @@ def test_production_configuration_preserves_legacy_settings() -> None:
     assert cfg.result_dir == cfg.hydra_dir
     assert cfg.hydra_root
     assert cfg.report.artifact_name == "simple_convolution.html"
+    assert (get_project_path() / cfg.images.rgb).is_file()
+    assert (get_project_path() / cfg.images.grayscale).is_file()
 
 
 @pytest.mark.parametrize("kernel_size", [0, -1, 2, 4])
