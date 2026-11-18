@@ -9,6 +9,7 @@ from importlib.resources import files
 from math import isclose, isfinite
 from pathlib import PurePosixPath
 from random import Random
+from typing import Any
 
 from omegaconf import DictConfig
 
@@ -345,22 +346,28 @@ def _parse_settings(cfg: DictConfig) -> NGramSettings:
     orders = _parse_orders(cfg)
     alphas = _parse_alphas(cfg)
     queries = _parse_probability_queries(cfg, orders)
-    split_seed = int(cfg.split.seed)
+    split_seed = _finite_integer(cfg.split.seed, "The split seed")
     training_fraction = float(cfg.split.training_fraction)
     validation_fraction = float(cfg.split.validation_fraction)
     if split_seed < 0:
         raise ValueError("The split seed must be non-negative")
     _validate_split_fractions(training_fraction, validation_fraction)
-    minimum_token_count = int(cfg.minimum_token_count)
+    minimum_token_count = _finite_integer(
+        cfg.minimum_token_count, "The minimum token count"
+    )
     if minimum_token_count <= 0:
         raise ValueError("The minimum token count must be positive")
-    top_k = int(cfg.top_k)
+    top_k = _finite_integer(cfg.top_k, "The top-k value")
     if top_k <= 0:
         raise ValueError("The top-k value must be positive")
-    generation_seeds = tuple(int(seed) for seed in cfg.generation.seeds)
+    generation_seeds = tuple(
+        _finite_integer(seed, "The generation seed") for seed in cfg.generation.seeds
+    )
     if not generation_seeds or any(seed < 0 for seed in generation_seeds):
         raise ValueError("Generation seeds must be non-empty and non-negative")
-    maximum_generated_tokens = int(cfg.generation.max_tokens)
+    maximum_generated_tokens = _finite_integer(
+        cfg.generation.max_tokens, "The generation token limit"
+    )
     if maximum_generated_tokens <= 0:
         raise ValueError("The generation token limit must be positive")
     return NGramSettings(
@@ -378,7 +385,7 @@ def _parse_settings(cfg: DictConfig) -> NGramSettings:
 
 
 def _parse_orders(cfg: DictConfig) -> tuple[int, ...]:
-    orders = tuple(int(order) for order in cfg.orders)
+    orders = tuple(_finite_integer(order, "The n-gram order") for order in cfg.orders)
     if not orders or any(order <= 0 for order in orders):
         raise ValueError("The n-gram orders must be non-empty and positive")
     if len(set(orders)) != len(orders):
@@ -400,7 +407,7 @@ def _parse_probability_queries(
 ) -> tuple[ProbabilityQuery, ...]:
     queries = tuple(
         ProbabilityQuery(
-            order=int(query.order),
+            order=_finite_integer(query.order, "The probability query order"),
             context=tuple(str(token) for token in query.context),
         )
         for query in cfg.probability_queries
@@ -416,6 +423,22 @@ def _parse_probability_queries(
                 f"{query.order - 1} context tokens"
             )
     return queries
+
+
+def _finite_integer(value: Any, name: str) -> int:
+    """Convert an integer-valued Hydra scalar without silent truncation."""
+    error = ValueError(f"{name} must be a finite integer")
+    if isinstance(value, bool):
+        raise error
+    if isinstance(value, int):
+        return value
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise error from exc
+    if not isfinite(numeric) or not numeric.is_integer():
+        raise error
+    return int(numeric)
 
 
 def _validate_split_fractions(

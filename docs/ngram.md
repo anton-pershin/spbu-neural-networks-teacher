@@ -129,7 +129,7 @@ The shared writer selects SVG at or below 102,400 serialized SVG bytes and PNG o
 
 ## Small test configuration
 
-`config/config_test_ngram.yaml` inherits the production configuration and uses the same real corpus, models, probability queries, and four figures. It reduces generation to seeds 7 and 42 and a 12-token limit, and writes `test_ngram.html`.
+`config/config_test_ngram.yaml` inherits the production configuration and uses the same real corpus, models, probability queries, and four figures. It reduces generation to seeds 7 and 42 and a 12-token limit, and writes `test_ngram.html`. Integer-valued settings must be finite and integral; fractional values are rejected rather than truncated.
 
 ```bash
 python -m spbunn.scripts.ngram \

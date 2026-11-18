@@ -20,6 +20,14 @@ from spbunn.ngram.pipeline import evaluate_ngram_experiment
 from tests.ngram_helpers import tiny_experiment
 
 
+def test_encoding_maps_oov_words_and_appends_eos() -> None:
+    experiment = tiny_experiment()
+
+    encoded = encode_sentences((("the", "new", "cat"),), experiment.known_tokens)
+
+    assert encoded == (("the", "<unk>", "cat", EOS_TOKEN),)
+
+
 def test_fit_bigram_counts_and_add_alpha_probabilities() -> None:
     experiment = tiny_experiment()
     training = encode_sentences(experiment.training_sentences, experiment.known_tokens)
@@ -79,6 +87,32 @@ def test_perplexity_and_sparsity_match_independent_calculation() -> None:
     assert metrics.event_count == 3
     assert metrics.unseen_ngram_fraction == pytest.approx(1 / 3)
     assert metrics.unseen_context_fraction == 0.0
+
+
+def test_unigram_has_zero_unseen_context_fraction_with_oov_events() -> None:
+    experiment = tiny_experiment()
+    training = encode_sentences(experiment.training_sentences, experiment.known_tokens)
+    evaluation = encode_sentences((("new",),), experiment.known_tokens)
+    model = fit_ngram_model(training, 1, experiment.prediction_vocabulary)
+
+    metrics = evaluate_ngram_model(model, evaluation, 0.1)
+
+    assert metrics.event_count == 2
+    assert metrics.unseen_ngram_fraction == pytest.approx(0.5)
+    assert metrics.unseen_context_fraction == 0.0
+
+
+def test_trigram_unseen_context_fraction_matches_tiny_corpus() -> None:
+    experiment = tiny_experiment()
+    training = encode_sentences(experiment.training_sentences, experiment.known_tokens)
+    evaluation = encode_sentences((("cat", "dog"),), experiment.known_tokens)
+    model = fit_ngram_model(training, 3, experiment.prediction_vocabulary)
+
+    metrics = evaluate_ngram_model(model, evaluation, 0.1)
+
+    assert metrics.event_count == 3
+    assert metrics.unseen_ngram_fraction == pytest.approx(1.0)
+    assert metrics.unseen_context_fraction == pytest.approx(2 / 3)
 
 
 def test_top_k_probability_order_ties_and_remaining_mass() -> None:
