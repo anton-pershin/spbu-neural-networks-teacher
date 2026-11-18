@@ -4,7 +4,7 @@
 
 #### 1.1 Spec description
 
-Implement roadmap item M5 as one word-level n-gram language-model pipeline. Train unigram, bigram, and trigram count models on an offline, hash-checked Alice corpus obtained from the official NLTK Gutenberg distribution. Produce an HTML report that explains probabilistic language modelling through conditional probabilities, held-out perplexity, sparsity, and seeded text generation. Preserve the producer / transformer / report-builder / shared-report-writer architecture.
+Implement roadmap item M6 as one word-level n-gram language-model pipeline. Train unigram, bigram, and trigram count models on an offline, hash-checked Alice corpus obtained from the official NLTK Gutenberg distribution. Produce an HTML report that explains probabilistic language modelling through conditional probabilities, held-out perplexity, sparsity, and seeded text generation. Preserve the producer / transformer / report-builder / shared-report-writer architecture.
 
 The selected teaching example and its evidence are recorded in the [n-gram pipeline investigation](../investigations/ngram-pipeline.md).
 
@@ -34,7 +34,7 @@ GetSomeMath introduces n-grams as simple language models but provides no executa
 
 **FR7. Documentation and checks.** Document execution, configuration, corpus provenance, numerical definitions, outputs, figure names, example observations, and tests in `docs/ngram.md` and the README. Include the new numerical modules, orchestrator, report builder, and tests in focused formatting, lint, type, and test checks. Preserve all existing behavior and checks.
 
-**FR8. Approved milestone boundary.** Add only the M5 n-gram pipeline and its supporting SDD records, resources, configuration, documentation, and tests. Apply the approved constitution additions for the n-gram design and M5 roadmap item and the approved terminology additions. Do not change FR1–FR3 or AC1–AC3 of the constitution, the shared report-writer contract, unrelated legacy modules, GetSomeMath, or another repository. Do not add backoff, interpolation, neural models, model serialization, a runtime downloader, or a generic pipeline framework.
+**FR8. Approved milestone boundary.** Add only the M6 n-gram pipeline and its supporting SDD records, resources, configuration, documentation, and tests. Apply the approved constitution additions for the n-gram design and M6 roadmap item and the approved terminology additions. Do not change FR1–FR3 or AC1–AC3 of the constitution, the shared report-writer contract, unrelated legacy modules, GetSomeMath, or another repository. Do not add backoff, interpolation, neural models, model serialization, a runtime downloader, or a generic pipeline framework.
 
 #### 2.2 Non-functional requirements
 
@@ -56,13 +56,13 @@ GetSomeMath introduces n-grams as simple language models but provides no executa
 
 **AC4. Pipeline and report outputs (FR5, FR6, NFR3, NFR4).** Compose both configurations and run the executable test pipeline in a subprocess from a different working directory. Verify the configured HTML, four referenced figures, SVG/PNG exclusivity, all artifacts in the run directory, no working-directory figures, embedded MathJax, and no external script. Verify orchestrator figure cleanup after success and controlled writer failure.
 
-**AC5. Quality and approved scope (FR7, FR8).** The complete test suite, focused static checks, and package build must pass. Package inspection must include the corpus and provenance resources. A diff review must confirm the approved M5/terminology changes and no unrelated pipeline or shared-writer changes.
+**AC5. Quality and approved scope (FR7, FR8).** The complete test suite, focused static checks, and package build must pass. Package inspection must include the corpus and provenance resources. A diff review must confirm the approved M6/terminology changes and no unrelated pipeline or shared-writer changes.
 
 **AC6. Human educational review.** A human reviewer must open the production report, inspect equations, top-k probabilities, metrics, figures, and all samples, and explicitly approve its mathematical and educational correctness. At least one report must be opened with network access disabled. Automated checks alone do not establish acceptance.
 
 ### 4. High-level solution design
 
-M5 adds the following constitution flow. Yellow components are new; the report writer and report models are existing shared components.
+M6 adds the following constitution flow. Yellow components are new; the report writer and report models are existing shared components.
 
 **N-gram language model — `ngram.py` orchestrator**
 

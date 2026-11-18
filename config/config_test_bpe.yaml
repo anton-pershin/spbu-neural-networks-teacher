@@ -1,0 +1,14 @@
+defaults:
+  - config_bpe
+  - _self_
+
+report:
+  title: Test byte-pair encoding
+  artifact_name: test_bpe.html
+
+toy:
+  n_merges: 4
+
+large:
+  n_merges: 20
+  checkpoints: [0, 10, 20]

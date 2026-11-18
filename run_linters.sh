@@ -13,6 +13,7 @@ checked_paths=(
   spbunn/optimization/schedulers.py
   spbunn/reporting
   spbunn/scripts/balduzzi_analysis.py
+  spbunn/scripts/bpe.py
   spbunn/scripts/hidden_norms_propagation.py
   spbunn/scripts/loss_landscape.py
   spbunn/scripts/mlp_depth_experiment.py
@@ -21,6 +22,7 @@ checked_paths=(
   spbunn/scripts/schedulers.py
   spbunn/scripts/simple_convolution.py
   spbunn/scripts/simple_loss_optimization.py
+  spbunn/sequence
   spbunn/utils/common.py
   tests
 )

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-M5 provides an executable introduction to probabilistic language modelling with word-level unigram, bigram, and trigram models. The pipeline trains exact count models, selects add-alpha smoothing on validation data, evaluates held-out perplexity and sparsity, displays conditional next-token distributions, and generates seeded text.
+M6 provides an executable introduction to probabilistic language modelling with word-level unigram, bigram, and trigram models. The pipeline trains exact count models, selects add-alpha smoothing on validation data, evaluates held-out perplexity and sparsity, displays conditional next-token distributions, and generates seeded text.
 
 The numerical filters have no file-output or plotting responsibility. `spbunn.reporting.ngram` builds the report, and the shared `ReportWriter` persists HTML and figures.
 
