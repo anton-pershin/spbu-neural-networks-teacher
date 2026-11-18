@@ -184,7 +184,7 @@ Producers only generate or load experiment input. Transformers only compute nume
 | M2 | Optimization pipelines | Done | `schedulers.py`, `loss_landscape.py`, and `simple_loss_optimization.py` run as Hydra-configured pipelines and produce complete HTML reports and figures through the shared components. |
 | M3 | MLP architecture and propagation pipelines | Done | `mlp_width_experiment.py`, `mlp_depth_experiment.py`, `hidden_norms_propagation.py`, and `balduzzi_analysis.py` run as Hydra-configured pipelines and produce complete HTML reports and figures through the shared components. |
 | M4 | Convolution pipeline | Done | `simple_convolution.py` runs as a Hydra-configured pipeline and produces a complete HTML report and figures through the shared components. |
-| M5 | BPE pipeline | To do | `bpe.py` demonstrates token synthesis on a complete toy trace and evaluates a larger bundled corpus on held-out chapters, producing a complete two-part HTML report and figures through the shared components. |
+| M5 | BPE pipeline | Done | `bpe.py` demonstrates token synthesis on a complete toy trace and evaluates a larger bundled corpus on held-out chapters, producing a complete two-part HTML report and figures through the shared components. |
 
 M2, M3, M4, and M5 may proceed concurrently after M1.
 
