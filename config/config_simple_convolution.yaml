@@ -1,0 +1,17 @@
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
+
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}
+
+images:
+  rgb: climate_change.png
+  grayscale: waves.png
+kernel_size: 7
+n_repetitions: 20
+report:
+  title: Simple repeated convolution
+  artifact_name: simple_convolution.html

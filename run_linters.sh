@@ -2,6 +2,7 @@
 set -euo pipefail
 
 checked_paths=(
+  spbunn/convolution.py
   spbunn/data/__init__.py
   spbunn/mlp/architecture.py
   spbunn/mlp/propagation.py
@@ -18,6 +19,7 @@ checked_paths=(
   spbunn/scripts/mlp_width_experiment.py
   spbunn/scripts/ngram.py
   spbunn/scripts/schedulers.py
+  spbunn/scripts/simple_convolution.py
   spbunn/scripts/simple_loss_optimization.py
   spbunn/utils/common.py
   tests
