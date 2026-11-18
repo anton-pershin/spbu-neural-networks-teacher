@@ -58,7 +58,7 @@ Sentence indices are shuffled with seed 42 and split at rounded cumulative bound
 | Validation | 0.15 | 226 | 4,263 |
 | Test | 0.15 | 225 | 3,852 |
 
-There are 1,503 retained sentences. The vocabulary uses training counts only. Words with count below two become `<unk>`. `<bos>` supplies left context but cannot be predicted. `<eos>` is appended to each encoded sentence and is included in perplexity events. The sorted prediction vocabulary contains 1,163 tokens, including `<unk>` and `<eos>` and excluding `<bos>`.
+There are 1,503 retained sentences. The vocabulary uses training counts only. Words with count below two become `<unk>`. The `<unk>` token means "unknown word": it groups many different rare or previously unseen original words into one vocabulary item, so the model cannot recover which original word it represents. Validation and test words absent from the training vocabulary also become `<unk>`. It can receive probability mass and be sampled, but it is not an English word. `<bos>` supplies left context but cannot be predicted. `<eos>` is appended to each encoded sentence and is included in perplexity events. The sorted prediction vocabulary contains 1,163 tokens, including `<unk>` and `<eos>` and excluding `<bos>`.
 
 ## Count models and evaluation
 
@@ -85,14 +85,27 @@ The report shows counts and selected-alpha probabilities for five next tokens in
 1. Unigram with empty context.
 2. Bigram after `the`.
 3. Trigram after `of the`.
+4. Trigram after the rarer context `the caterpillar`.
 
 Rows are sorted by decreasing probability and then token text. Each table includes `all other tokens` with the remaining probability mass. The top rows alone do not sum to one. Top-k is a display only; evaluation and generation use the full vocabulary.
 
 For example, the bigram after `the` assigns approximately 9.864% to `<unk>`, 3.842% to `queen`, 3.755% to `king`, 3.406% to `gryphon`, and 3.319% to `mock`. The remaining tokens share approximately 75.814%.
 
+The additional trigram example has 14 training events for `the caterpillar`, compared with 81 for `of the`. Its top rows are `<eos>` with count 5 and probability 19.547%, `and` and `took` with count 2 and probability 7.842% each, and `angrily` and `called` with count 1 and probability 3.941% each. The remaining mass is 56.886%. This makes the effect of a small context count visible without using an unseen context whose distribution would be uniform.
+
 ## Seeded generation
 
-Production generation uses seeds 7, 42, and 123 for every order. At each step, the model samples from the full smoothed distribution, appends the token, shifts the context, and repeats. It stops at `<eos>` or after 30 generated tokens. The report retains empty, incoherent, and length-limited samples without wording corrections or readability filtering. Every row identifies its order, seed, text, and stop reason.
+A generation context is the previous word or words used to predict the next word. For example, a trigram after `alice was` uses those two words to assign next-token probabilities. At the start of a new sentence there are no previous words, so `<bos>` (beginning of sentence) fills the missing positions. It is not an English word and cannot be generated. The initial contexts are:
+
+| Order | Initial context |
+|---:|---|
+| 1 | Empty; the unigram does not use context |
+| 2 | One `<bos>` marker |
+| 3 | Two `<bos>` markers |
+
+As words are generated, real words enter the context and displace the markers. For the bigram sample with seed 42, the first prediction uses `<bos>` and produces `said`; the next uses the real-word context `said` and produces `alice`; then the context `alice` produces `because`. The report includes an equivalent walkthrough derived from an available bigram sample and shows the initial context in every generation row.
+
+Production generation uses seeds 7, 42, and 123 for every order. At each step, the model samples from the full smoothed distribution, appends the token, shifts the context, and repeats. It stops at `<eos>` or after 30 generated tokens. The report retains empty, incoherent, and length-limited samples without wording corrections or readability filtering. Every row identifies its order, initial context, seed, text, and stop reason.
 
 One bigram sample with seed 42 is:
 
@@ -123,9 +136,11 @@ The run directory contains `ngram.html` and one SVG or PNG artifact for each ste
 | `ngram_validation_perplexity` | Validation perplexity across the alpha grid |
 | `ngram_train_test_perplexity` | Training and test perplexity by order |
 | `ngram_test_sparsity` | Unseen test n-gram events and contexts |
-| `ngram_top_k_probabilities` | Top-k rows and remaining mass for all three contexts |
+| `ngram_top_k_probabilities` | Top-k rows and remaining mass for all four contexts |
 
-The shared writer selects SVG at or below 102,400 serialized SVG bytes and PNG otherwise. The HTML includes the equation, provenance, preprocessing rules, corpus statistics, result tables, all top-k tables, all samples, and interpretation. It embeds MathJax and needs no external script, CDN, or font. Dynamic text and special tokens are HTML-escaped.
+The figures use 14-point base text, 15-point axis labels and titles, and 13-point tick labels and legends. These settings are applied in a local Matplotlib context, which restores global plotting defaults after report construction.
+
+The shared writer selects SVG at or below 102,400 serialized SVG bytes and PNG otherwise. The HTML includes the equation, provenance, preprocessing rules, corpus statistics, result tables, all top-k tables, all samples, and interpretation. It embeds MathJax and needs no external script, CDN, or web font. Dynamic text and special tokens are HTML-escaped.
 
 ## Small test configuration
 
@@ -147,6 +162,6 @@ MPLBACKEND=Agg python -m pytest
 python -m build
 ```
 
-The n-gram tests cover exact resource integrity, tokenization, deterministic disjoint splits, training-only vocabulary, hand-calculated counts and probabilities, normalization for seen and unseen contexts, perplexity, sparsity, validation-only alpha selection, top-k ordering and remaining mass, deterministic sampling and stop reasons, production regressions, HTML escaping, figure contents, end-to-end artifacts, and figure cleanup after success and writer failure.
+The n-gram tests cover exact resource integrity, tokenization, deterministic disjoint splits, training-only vocabulary, hand-calculated counts and probabilities, normalization for seen and unseen contexts, perplexity, sparsity, validation-only alpha selection, top-k ordering and remaining mass, deterministic sampling and stop reasons, production regressions, HTML escaping, special-token and generation-context explanations, enlarged figure fonts, end-to-end artifacts, and figure cleanup after success and writer failure.
 
 Package inspection must confirm that the Alice corpus and provenance resources are included. A human reviewer must open the production report and approve its mathematical and educational content. Offline browser review of mathematical rendering is also required.

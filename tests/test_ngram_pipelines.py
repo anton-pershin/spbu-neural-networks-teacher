@@ -163,6 +163,22 @@ def test_production_top_k_and_samples_are_exact_regressions() -> None:
     assert [item.probability for item in bigram.items] == pytest.approx(
         [0.09863949, 0.03842428, 0.03755160, 0.03406086, 0.03318818]
     )
+
+    rare_trigram = result.probability_distributions[3]
+    assert rare_trigram.order == 3
+    assert rare_trigram.context == ("the", "caterpillar")
+    assert rare_trigram.context_count == 14
+    assert [(item.token, item.count) for item in rare_trigram.items] == [
+        ("<eos>", 5),
+        ("and", 2),
+        ("took", 2),
+        ("angrily", 1),
+        ("called", 1),
+    ]
+    denominator = 14 + 0.01 * 1163
+    assert [item.probability for item in rare_trigram.items] == pytest.approx(
+        [(count + 0.01) / denominator for count in (5, 2, 2, 1, 1)]
+    )
     for distribution in result.probability_distributions:
         assert sum(
             item.probability for item in distribution.items
@@ -191,6 +207,14 @@ def test_configs_compose_common_run_directory(config_name: str) -> None:
     assert cfg.hydra_root
     assert cfg.report.artifact_name.endswith(".html")
     assert cfg.top_k == 5
+    assert [
+        (query.order, tuple(query.context)) for query in cfg.probability_queries
+    ] == [
+        (1, ()),
+        (2, ("the",)),
+        (3, ("of", "the")),
+        (3, ("the", "caterpillar")),
+    ]
 
 
 @pytest.mark.parametrize(

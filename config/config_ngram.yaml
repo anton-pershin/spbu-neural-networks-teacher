@@ -25,6 +25,8 @@ probability_queries:
     context: [the]
   - order: 3
     context: [of, the]
+  - order: 3
+    context: [the, caterpillar]
 top_k: 5
 generation:
   seeds: [7, 42, 123]

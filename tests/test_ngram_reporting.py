@@ -21,13 +21,29 @@ def test_report_contains_all_educational_results_and_four_figures() -> None:
             tuple(figure.artifact_name for figure in report.figures)
             == NGRAM_FIGURE_STEMS
         )
-        assert [len(figure.figure.axes) for figure in report.figures] == [1, 1, 1, 3]
+        assert [len(figure.figure.axes) for figure in report.figures] == [1, 1, 1, 4]
         html = report.html_content
         assert "N-gram language models" in html
         assert r"P_\alpha(w\mid c)" in html
         assert result.source_sha256 in html
         assert "Top-k conditional probability distributions" in html
         assert "Seeded text generation" in html
+        assert "&lt;unk&gt;</code> means <strong>unknown word</strong>" in html
+        assert "groups many different original words" in html
+        assert "abide" in html and "absence" in html
+        assert "<th>Initial context</th>" in html
+        assert "empty (no previous token)" in html
+        assert "<code>alice was</code>" in html
+        walkthrough_sample = next(
+            sample
+            for sample in result.generated_samples
+            if sample.order == 2 and len(sample.tokens) >= 3
+        )
+        first, second, third = (
+            escape(token) for token in walkthrough_sample.tokens[:3]
+        )
+        assert f"real-word context <code>{first}</code>" in html
+        assert f"context <code>{second}</code> produces <code>{third}</code>" in html
         assert "This observation is specific" in html
         assert "not a" in html and "universal ranking" in html
         assert "<unk>" not in html
@@ -81,11 +97,13 @@ def test_report_escapes_source_tokens_and_generated_text() -> None:
             plt.close(figure.figure)
 
 
-def test_report_figure_titles_and_axes_describe_probability_and_sparsity() -> None:
+def test_report_figure_titles_axes_and_font_sizes_are_readable() -> None:
+    original_font_size = plt.rcParams["font.size"]
     report = build_ngram_report(
         production_ngram_result(), "Figure inspection", "figures.html"
     )
     try:
+        assert plt.rcParams["font.size"] == original_font_size
         validation, perplexity, sparsity, top_k = report.figures
         assert validation.figure.axes[0].get_ylabel() == "Validation perplexity"
         assert perplexity.figure.axes[0].get_yscale() == "log"
@@ -93,7 +111,23 @@ def test_report_figure_titles_and_axes_describe_probability_and_sparsity() -> No
         assert sparsity.figure.axes[0].get_ylim() == (0.0, 100.0)
         assert "context: the" in top_k.figure.axes[1].get_title()
         assert "context: of the" in top_k.figure.axes[2].get_title()
+        assert "context: the caterpillar" in top_k.figure.axes[3].get_title()
         assert top_k.figure.axes[0].get_xlabel() == "Conditional probability"
+
+        for report_figure in report.figures:
+            for axis in report_figure.figure.axes:
+                assert float(axis.xaxis.label.get_fontsize()) >= 15
+                assert float(axis.yaxis.label.get_fontsize()) >= 15
+                assert float(axis.get_xticklabels()[0].get_fontsize()) >= 13
+                assert float(axis.get_yticklabels()[0].get_fontsize()) >= 13
+        legend = validation.figure.axes[0].get_legend()
+        assert legend is not None
+        for text in legend.get_texts():
+            assert float(text.get_fontsize()) >= 13
+        assert float(top_k.figure.axes[0].title.get_fontsize()) >= 15
+        assert all(
+            float(text.get_fontsize()) >= 14 for text in top_k.figure.axes[0].texts
+        )
     finally:
         for figure in report.figures:
             plt.close(figure.figure)

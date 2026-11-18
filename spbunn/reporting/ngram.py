@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
 
-from spbunn.ngram.model import GeneratedSample, TopKDistribution
+from spbunn.ngram.model import BOS_TOKEN, GeneratedSample, TopKDistribution
 from spbunn.ngram.pipeline import NGramExperimentResult, NGramOrderResult
 from spbunn.reporting.models import FigureModel, ReportModel
 
@@ -47,12 +47,22 @@ def build_ngram_report(
         _generation_section(result),
         _interpretation_section(result),
     ]
-    figures = (
-        _validation_figure(result.order_results),
-        _perplexity_figure(result.order_results),
-        _sparsity_figure(result.order_results),
-        _top_k_figure(result.probability_distributions),
-    )
+    with plt.rc_context(
+        {
+            "font.size": 14.0,
+            "axes.titlesize": 15.0,
+            "axes.labelsize": 15.0,
+            "xtick.labelsize": 13.0,
+            "ytick.labelsize": 13.0,
+            "legend.fontsize": 13.0,
+        }
+    ):
+        figures = (
+            _validation_figure(result.order_results),
+            _perplexity_figure(result.order_results),
+            _sparsity_figure(result.order_results),
+            _top_k_figure(result.probability_distributions),
+        )
     return ReportModel(
         title=title,
         html_content="\n".join(sections),
@@ -90,12 +100,22 @@ def _corpus_section(result: NGramExperimentResult) -> str:
         "installation. The packaged file SHA-256 is "
         f"<code>{escape(result.source_sha256)}</code>.</p>"
         f"<p>Sentence shuffling uses seed {settings.split_seed}. Sentences "
-        "are split by index, not by individual words. Words below training "
-        f"count {settings.minimum_token_count} become <code>&lt;unk&gt;</code>. "
-        "<code>&lt;bos&gt;</code> supplies left context and "
-        "<code>&lt;eos&gt;</code> is an evaluation and generation stop event. "
-        f"The prediction vocabulary has {corpus.vocabulary_size} tokens. "
-        "Word counts below exclude <code>&lt;eos&gt;</code>.</p>"
+        "are split by index, not by individual words. The prediction "
+        f"vocabulary has {corpus.vocabulary_size} tokens.</p>"
+        "<p><code>&lt;unk&gt;</code> means <strong>unknown word</strong>. "
+        "It groups many different original words into one vocabulary item. "
+        f"Training words that occur fewer than {settings.minimum_token_count} "
+        "times and validation or test words absent from the training "
+        "vocabulary are replaced by <code>&lt;unk&gt;</code>. For example, "
+        "if <code>abide</code> and <code>absence</code> are both below this "
+        "limit, the model sees the same <code>&lt;unk&gt;</code> token for "
+        "both and cannot recover which original word appeared. "
+        "<code>&lt;unk&gt;</code> can receive probability mass and be "
+        "sampled, but it is not an English word.</p>"
+        "<p><code>&lt;bos&gt;</code> means beginning of sentence and supplies "
+        "temporary left context. <code>&lt;eos&gt;</code> means end of "
+        "sentence and is an evaluation and generation stop event. Word counts "
+        "below exclude <code>&lt;eos&gt;</code>.</p>"
         "<table><thead><tr><th>Split</th><th>Sentences</th><th>Words</th></tr>"
         f"</thead><tbody>{table_rows}</tbody></table>"
         f"<p>The retained corpus has {corpus.sentence_count} sentences. "
@@ -174,16 +194,53 @@ def _generation_section(result: NGramExperimentResult) -> str:
     rows = "".join(_sample_row(sample) for sample in result.generated_samples)
     return (
         "<section><h2>Seeded text generation</h2>"
-        "<p>Each sample starts with sentence-boundary context. The model "
-        "samples one token from the full smoothed distribution, appends it, "
-        "shifts the context, and repeats. It stops at "
-        "<code>&lt;eos&gt;</code> or the configured limit of "
+        "<p>A context is the previous word or words used to predict the next "
+        "word. For example, after the words <code>alice was</code>, a trigram "
+        "uses exactly those two words as its context and assigns a probability "
+        "to every possible next word.</p>"
+        "<p>At the beginning of a new sentence there are no previous words. "
+        "The special marker <code>&lt;bos&gt;</code> means beginning of "
+        "sentence and fills the missing context positions. It is not an "
+        "English word and cannot be generated. The unigram starts with an "
+        "empty context, the bigram with one <code>&lt;bos&gt;</code>, and the "
+        "trigram with two <code>&lt;bos&gt;</code> markers. As words are "
+        "generated, real words enter the context and displace these markers.</p>"
+        f"{_generation_walkthrough(result.generated_samples)}"
+        "<p>For every row below, the model samples one token from the full "
+        "smoothed distribution, appends it, shifts the context, and repeats. "
+        "It stops at <code>&lt;eos&gt;</code> or the configured limit of "
         f"{result.settings.maximum_generated_tokens} tokens. Output is not "
         "corrected or filtered for readability.</p>"
-        "<table><thead><tr><th>Order</th><th>Seed</th><th>Generated text</th>"
-        f"<th>Stop reason</th></tr></thead><tbody>{rows}</tbody></table>"
+        "<table><thead><tr><th>Order</th><th>Initial context</th><th>Seed</th>"
+        "<th>Generated text</th><th>Stop reason</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table>"
         "</section>"
     )
+
+
+def _generation_walkthrough(samples: tuple[GeneratedSample, ...]) -> str:
+    sample = next(
+        (item for item in samples if item.order == 2 and len(item.tokens) >= 3),
+        None,
+    )
+    if sample is None:
+        return ""
+    first, second, third = (escape(token) for token in sample.tokens[:3])
+    return (
+        f"<p>For the bigram sample with seed {sample.seed}, the first "
+        "prediction uses <code>&lt;bos&gt;</code>, and this seeded draw "
+        f"produces <code>{first}</code>. The next prediction uses the "
+        f"real-word context <code>{first}</code> and produces "
+        f"<code>{second}</code>; then the context <code>{second}</code> "
+        f"produces <code>{third}</code>.</p>"
+    )
+
+
+def _initial_context(order: int) -> str:
+    if order == 1:
+        return "empty (no previous token)"
+    markers = " ".join((BOS_TOKEN,) * (order - 1))
+    return f"<code>{escape(markers)}</code>"
 
 
 def _sample_row(sample: GeneratedSample) -> str:
@@ -197,8 +254,9 @@ def _sample_row(sample: GeneratedSample) -> str:
         else "maximum token limit"
     )
     return (
-        f"<tr><td>{sample.order}</td><td>{sample.seed}</td>"
-        f"<td><code>{text}</code></td><td>{stop_reason}</td></tr>"
+        f"<tr><td>{sample.order}</td><td>{_initial_context(sample.order)}</td>"
+        f"<td>{sample.seed}</td><td><code>{text}</code></td>"
+        f"<td>{stop_reason}</td></tr>"
     )
 
 
@@ -244,7 +302,7 @@ def _html_context(context: tuple[str, ...]) -> str:
 def _validation_figure(
     order_results: tuple[NGramOrderResult, ...],
 ) -> FigureModel:
-    figure, axis = plt.subplots(figsize=(7, 5))
+    figure, axis = plt.subplots(figsize=(8, 5.5))
     for result in order_results:
         axis.semilogx(
             [point.alpha for point in result.validation_curve],
@@ -263,7 +321,7 @@ def _validation_figure(
 def _perplexity_figure(
     order_results: tuple[NGramOrderResult, ...],
 ) -> FigureModel:
-    figure, axis = plt.subplots(figsize=(7, 5))
+    figure, axis = plt.subplots(figsize=(8, 5.5))
     positions = np.arange(len(order_results))
     width = 0.36
     axis.bar(
@@ -289,7 +347,7 @@ def _perplexity_figure(
 def _sparsity_figure(
     order_results: tuple[NGramOrderResult, ...],
 ) -> FigureModel:
-    figure, axis = plt.subplots(figsize=(7, 5))
+    figure, axis = plt.subplots(figsize=(8, 5.5))
     positions = np.arange(len(order_results))
     width = 0.36
     axis.bar(
@@ -325,7 +383,7 @@ def _top_k_figure(
     figure, axes = plt.subplots(
         len(distributions),
         1,
-        figsize=(9, 3.5 * len(distributions)),
+        figsize=(10, 3.8 * len(distributions)),
         squeeze=False,
     )
     for axis, distribution in zip(axes.flat, distributions, strict=True):
