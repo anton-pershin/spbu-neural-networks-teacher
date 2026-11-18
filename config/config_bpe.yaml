@@ -1,0 +1,30 @@
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
+
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}
+
+report:
+  title: Byte-pair encoding
+  artifact_name: bpe.html
+
+toy:
+  corpus:
+    - {word: low, frequency: 5}
+    - {word: lower, frequency: 2}
+    - {word: newest, frequency: 6}
+    - {word: widest, frequency: 3}
+  n_merges: 12
+  sample_words: [low, lower, newest, lowest, widest, wide]
+
+large:
+  corpus_path: data/alice_in_wonderland.txt
+  n_merges: 1000
+  checkpoints: [0, 100, 250, 500, 1000]
+  sentence_words:
+    [the, knave, of, hearts, he, stole, those, tarts, and, took, them, quite, away]
+  frequent_token_limit: 20
+  unseen_word_limit: 6
