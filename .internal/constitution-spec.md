@@ -136,6 +136,16 @@ flowchart LR
   B -- "Report model" --> C["Report writer"]
 ```
 
+**BPE — `bpe.py` orchestrator**
+
+```mermaid
+flowchart LR
+  O["BPE orchestrator"] -. invokes .-> P["Toy and book corpus producer"]
+  P -- "Word frequencies, merge settings, held-out words, and samples" --> T["BPE trainer, tokenizer, and checkpoint evaluator"]
+  T -- "Toy trace, merge rules, checkpoint metrics, and tokenizations" --> B["Two-part BPE report builder"]
+  B -- "Report model" --> C["Report writer"]
+```
+
 #### 4.2. Core components
 
 **Orchestrators and pipeline-specific filters.** Each orchestrator is a thin Hydra entry point at the path shown below. It resolves configuration, constructs the filters, connects their pipes, and invokes them in the order shown in section 4.1. It contains no numerical experiment, figure-rendering, or report-persistence logic.
@@ -150,6 +160,7 @@ flowchart LR
 | `spbunn/scripts/simple_loss_optimization.py` | Sample function data and construct a parameter grid | Run mini-batch SGD and compute its loss landscape | Simple optimization report builder |
 | `spbunn/scripts/mlp_width_experiment.py` | Generate function-regression datasets and width-sweep settings | Search hyperparameters; train shallow ReLU models across widths and seeds; collect predictions and errors | MLP width report builder |
 | `spbunn/scripts/mlp_depth_experiment.py` | Generate function-regression datasets and depth-sweep settings | Search hyperparameters; train deep plain ReLU models across depths and seeds; collect predictions and errors | MLP depth report builder |
+| `spbunn/scripts/bpe.py` | Create the toy word frequencies; load and split the bundled book; construct merge, checkpoint, and sample settings | Learn ordered BPE merges; tokenize samples and held-out text; calculate checkpoint metrics | Two-part BPE report builder |
 
 Producers only generate or load experiment input. Transformers only compute numerical results. Each report builder is a reducer that converts its pipeline's results into a report model containing HTML content, figure objects, and artifact names. Report builders may share presentation utilities but own their pipeline-specific explanatory content. Reusable model, training, and numerical utilities are explicit dependencies of producer and transformer filters; they do not write artifacts or own pipeline orchestration.
 
@@ -157,8 +168,8 @@ Producers only generate or load experiment input. Transformers only compute nume
 
 | Pipe | Contents |
 |---|---|
-| Experiment input | Pipeline-specific images, kernels, numerical grids, samples, training data, model settings, and hyperparameter grids |
-| Experiment result | Numerical curves, transformed images, predictions, training histories, gradients, norms, Jacobian metrics, and optimization results |
+| Experiment input | Pipeline-specific images, kernels, numerical grids, samples, training data, word frequencies, held-out words, model settings, and hyperparameter grids |
+| Experiment result | Numerical curves, transformed images, predictions, training histories, gradients, norms, Jacobian metrics, optimization results, token sequences, merge traces, and token-count metrics |
 | Report model | HTML content, figure objects, and artifact names required by the report |
 
 **Shared report writer.** The report writer is the single consumer used by every pipeline. It writes the report model's HTML with LaTeX support and figures into the Hydra-configured run directory. For each figure, it serializes the SVG representation, saves SVG when its size is at most 102,400 bytes, and otherwise saves PNG instead of SVG. It performs no model fitting or other numerical experiment work.
@@ -173,12 +184,14 @@ Producers only generate or load experiment input. Transformers only compute nume
 | M2 | Optimization pipelines | To do | `schedulers.py`, `loss_landscape.py`, and `simple_loss_optimization.py` run as Hydra-configured pipelines and produce complete HTML reports and figures through the shared components. |
 | M3 | MLP architecture and propagation pipelines | To do | `mlp_width_experiment.py`, `mlp_depth_experiment.py`, `hidden_norms_propagation.py`, and `balduzzi_analysis.py` run as Hydra-configured pipelines and produce complete HTML reports and figures through the shared components. |
 | M4 | Convolution pipeline | To do | `simple_convolution.py` runs as a Hydra-configured pipeline and produces a complete HTML report and figures through the shared components. |
+| M5 | BPE pipeline | To do | `bpe.py` demonstrates token synthesis on a complete toy trace and evaluates a larger bundled corpus on held-out chapters, producing a complete two-part HTML report and figures through the shared components. |
 
-M2, M3, and M4 may proceed concurrently after M1.
+M2, M3, M4, and M5 may proceed concurrently after M1.
 
 ```mermaid
 flowchart TD
   M1["M1: Hydra and reporting foundation"] --> M2["M2: Optimization pipelines"]
   M1 --> M3["M3: MLP architecture and propagation pipelines"]
   M1 --> M4["M4: Convolution pipeline"]
+  M1 --> M5["M5: BPE pipeline"]
 ```
