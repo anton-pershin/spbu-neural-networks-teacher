@@ -2,7 +2,7 @@
 
 Executable teaching materials for the Neural Networks course at SpbU. The repository uses Hydra for configuration and shared report components for HTML, SVG, and PNG outputs.
 
-> **Milestone status:** M1 provides the project and reporting foundation. M2 provides the schedulers, loss-landscape, and simple loss-optimization pipelines. M3 provides the MLP width, MLP depth, hidden-propagation, and Balduzzi HTML-reporting pipelines. M4 remains a legacy implementation. M5 provides the two-part BPE pipeline.
+> **Milestone status:** M1 provides the project and reporting foundation. M2 provides the schedulers, loss-landscape, and simple loss-optimization pipelines. M3 provides the MLP width, MLP depth, hidden-propagation, and Balduzzi HTML-reporting pipelines. M4 provides the simple convolution HTML-reporting pipeline. M5 provides the two-part BPE pipeline.
 
 ## Repository structure
 
@@ -15,6 +15,7 @@ docs/                      Component and usage documentation
 spbunn/                    Python package
   optimization/            Numerical filters and shared plotting helpers
   mlp/                     MLP models, architecture experiments, and propagation filters
+  convolution.py           Image producer and repeated-convolution evaluator
   reporting/               Report models, builders, and shared report writer
   scripts/                 Executable experiment scripts
   sequence/                BPE training, tokenization, and corpus evaluation
@@ -90,6 +91,26 @@ Each command writes an HTML report and its figures into `result_dir`. The defaul
 
 See [docs/mlp.md](docs/mlp.md) for configuration overrides, numerical behavior, figure names, the reconstructed Balduzzi residual network, and test execution.
 
+## Convolution pipeline
+
+Run the M4 pipeline from the source-checkout root:
+
+```bash
+python -m spbunn.scripts.simple_convolution
+```
+
+This uses the repository's default `climate_change.png` for the horizontal and vertical kernels and `waves.png` for the diagonal kernel. Both paths remain configurable:
+
+```bash
+python -m spbunn.scripts.simple_convolution \
+  images.rgb=/path/to/rgb.png \
+  images.grayscale=/path/to/grayscale.png
+```
+
+Relative override paths are resolved from the original invocation directory. The command writes `simple_convolution.html` and the horizontal, vertical, and diagonal convolution figures into `result_dir`.
+
+See [docs/convolution.md](docs/convolution.md) for input and output overrides, numerical behavior, figure names, the small test configuration, and test execution.
+
 ## BPE pipeline
 
 Run the M5 byte-pair encoding demonstration from a source checkout:
@@ -141,6 +162,6 @@ python -m pytest
 python -m build
 ```
 
-The checks cover the M1 foundation, M2 optimization pipelines, M3 architecture and propagation pipelines, M5 BPE pipeline, and tests. They intentionally do not reformat or lint unrelated legacy numerical modules. The tests include exact checks below, at, and above the 102,400-byte SVG threshold, embedded MathJax support, numerical behavior, deterministic BPE traces, held-out tokenization, and end-to-end pipeline output.
+The checks cover the M1 foundation, M2 optimization pipelines, M3 architecture and propagation pipelines, M4 convolution pipeline, M5 BPE pipeline, and tests. They intentionally do not reformat or lint unrelated legacy numerical modules. The tests include exact checks below, at, and above the 102,400-byte SVG threshold, embedded MathJax support, numerical behavior, deterministic BPE traces, held-out tokenization, and end-to-end pipeline output.
 
 The GitHub Actions **CI/CD** workflow runs these checks on pushes to `main` and on pull requests. It builds the source and wheel distributions and uploads them as the `python-distributions` workflow artifact.
