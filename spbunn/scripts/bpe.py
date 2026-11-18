@@ -27,6 +27,8 @@ def bpe(cfg: DictConfig) -> None:
         large,
         title=cfg.report.title,
         artifact_name=cfg.report.artifact_name,
+        toy_figure_artifact_name=cfg.report.toy_figure_artifact_name,
+        large_figure_artifact_name=cfg.report.large_figure_artifact_name,
     )
     try:
         ReportWriter(cfg.result_dir).write(report)

@@ -35,6 +35,7 @@ def test_chapter_parser_accepts_both_book_heading_layouts() -> None:
     assert "Alice was beginning" in chapters[1]
     assert "Who Stole the Tarts" not in chapters[11]
     assert "The King and Queen of Hearts" in chapters[11]
+    assert "Alice's Evidence" not in chapters[12]
     assert "pack of cards" in chapters[12]
 
 
@@ -66,6 +67,8 @@ def test_production_configuration_composes_and_loads_inputs() -> None:
 
     assert cfg.result_dir == cfg.hydra_dir
     assert cfg.report.artifact_name == "bpe.html"
+    assert cfg.report.toy_figure_artifact_name == "bpe_toy_dynamics"
+    assert cfg.report.large_figure_artifact_name == "bpe_large_corpus_compression"
     assert toy.n_merges == 12
     assert tuple(item.word for item in toy.corpus) == (
         "low",
@@ -109,6 +112,14 @@ def test_sentence_must_come_from_heldout_text() -> None:
 
     with pytest.raises(ValueError, match="sentence words must occur in held-out"):
         produce_large_input(cfg)
+
+
+def test_nonzero_baseline_override_is_rejected_through_experiment() -> None:
+    cfg = compose_sequence_config("config_test_bpe", ["large.checkpoints=[10,20]"])
+    experiment = produce_large_input(cfg)
+
+    with pytest.raises(ValueError, match="zero-merge baseline"):
+        run_large_experiment(experiment)
 
 
 def test_small_real_corpus_experiments_use_same_data_flow() -> None:
@@ -166,11 +177,11 @@ def test_production_book_run_reaches_merges_and_compresses_heldout() -> None:
         29_903,
     ]
     assert [item.heldout_token_count for item in checkpoints] == [
-        20_598,
-        10_341,
-        8_182,
-        6_705,
-        5_766,
+        20_581,
+        10_330,
+        8_171,
+        6_696,
+        5_761,
     ]
     assert checkpoints[-1].heldout_token_count < checkpoints[0].heldout_token_count
     assert checkpoints[-1].training_token_count < checkpoints[0].training_token_count

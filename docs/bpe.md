@@ -80,12 +80,12 @@ low | est</w>
 
 `data/alice_in_wonderland.txt` is the unmodified `carroll-alice.txt` file from the NLTK Project Gutenberg selections archive. The work is Lewis Carroll's public-domain *Alice's Adventures in Wonderland*. `data/README.md` records the download source and SHA-256, and `data/gutenberg-README.txt` retains the collection's original notices.
 
-The loader supports both chapter-heading layouts in the file. It normalizes curly apostrophes to straight apostrophes, lowercases the text, and extracts ASCII-letter words with optional internal apostrophes. Punctuation is excluded. Chapters 1–10 provide weighted training word frequencies; chapters 11–12 remain held out.
+The loader supports both chapter-heading layouts in the file and excludes chapter headings and titles. It normalizes curly apostrophes to straight apostrophes, lowercases the text, and extracts ASCII-letter words with optional internal apostrophes. Punctuation is excluded. Chapters 1–10 provide weighted training word frequencies; chapters 11–12 remain held out.
 
 The production data has:
 
 - 22,577 training words and 2,389 distinct training words;
-- 4,031 held-out words;
+- 4,029 held-out words;
 - 28 initial tokens, including the end-of-word marker.
 
 ### Production checkpoints
@@ -94,11 +94,11 @@ The default configuration learns 1,000 merges and evaluates prefixes of 0, 100, 
 
 | Merges | Vocabulary | Training tokens | Held-out tokens | Held-out tokens / word |
 |---:|---:|---:|---:|---:|
-| 0 | 28 | 113,985 | 20,598 | 5.110 |
-| 100 | 128 | 57,293 | 10,341 | 2.565 |
-| 250 | 278 | 44,402 | 8,182 | 2.030 |
-| 500 | 528 | 36,199 | 6,705 | 1.663 |
-| 1,000 | 1,028 | 29,903 | 5,766 | 1.430 |
+| 0 | 28 | 113,985 | 20,581 | 5.108 |
+| 100 | 128 | 57,293 | 10,330 | 2.564 |
+| 250 | 278 | 44,402 | 8,171 | 2.028 |
+| 500 | 528 | 36,199 | 6,696 | 1.662 |
+| 1,000 | 1,028 | 29,903 | 5,761 | 1.430 |
 
 The final held-out token count is 72.0% below the character baseline. The figure shows training and held-out token counts as percentages of their own baselines, so the two curves are directly comparable.
 
@@ -120,7 +120,7 @@ python -m spbunn.scripts.bpe \
   result_dir=/tmp/spbunn-bpe hydra.run.dir=/tmp/spbunn-bpe
 ```
 
-Checkpoints must be unique, strictly increasing, non-negative, and no greater than the actual merge count. The configured sentence words must occur in the held-out chapters.
+Checkpoints must begin with the zero-merge baseline and be unique, strictly increasing, non-negative, and no greater than the actual merge count. The configured sentence words must occur in the held-out chapters. Use `report.toy_figure_artifact_name` and `report.large_figure_artifact_name` to override the default figure stems.
 
 ## Components and tests
 

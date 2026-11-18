@@ -285,6 +285,8 @@ def _unseen_word_examples(
 def _validate_checkpoints(checkpoints: Sequence[int], actual_merge_count: int) -> None:
     if not checkpoints:
         raise ValueError("checkpoints must not be empty")
+    if checkpoints[0] != 0:
+        raise ValueError("checkpoints must begin with the zero-merge baseline")
     if any(
         checkpoint < 0 or checkpoint > actual_merge_count for checkpoint in checkpoints
     ) or any(later <= earlier for earlier, later in zip(checkpoints, checkpoints[1:])):

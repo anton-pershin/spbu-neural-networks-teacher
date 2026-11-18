@@ -35,7 +35,8 @@ ROMAN_NUMERALS = {
     "XII": 12,
 }
 CHAPTER_PATTERN = re.compile(
-    r"(?m)^[ \t]*CHAPTER[ \t]+([IVXLCDM]+)(?:\.[^\n]*)?[ \t]*$"
+    r"(?m)^[ \t]*CHAPTER[ \t]+([IVXLCDM]+)"
+    r"(?:\.[^\n]*|[ \t]*\r?\n(?:[ \t]*\r?\n)*[ \t]+[^\n]+)?[ \t]*$"
 )
 WORD_PATTERN = re.compile(r"[a-z]+(?:'[a-z]+)?")
 

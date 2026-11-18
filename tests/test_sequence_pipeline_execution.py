@@ -71,11 +71,27 @@ def test_executable_pipeline_writes_complete_two_part_report(
 
 
 def test_orchestrator_closes_figures_after_success(tmp_path: Path) -> None:
-    cfg = compose_sequence_config("config_test_bpe", [f"result_dir={tmp_path / 'run'}"])
+    run_directory = tmp_path / "run"
+    cfg = compose_sequence_config(
+        "config_test_bpe",
+        [
+            f"result_dir={run_directory}",
+            "report.toy_figure_artifact_name=configured_toy",
+            "report.large_figure_artifact_name=configured_large",
+        ],
+    )
 
     bpe(cfg)
 
     assert not plt.get_fignums()
+    html = (run_directory / "test_bpe.html").read_text(encoding="utf-8")
+    image_names = re.findall(r'<img src="([^"]+)"', html)
+    assert {Path(name).stem for name in image_names} == {
+        "configured_toy",
+        "configured_large",
+    }
+    for image_name in image_names:
+        assert (run_directory / image_name).is_file()
 
 
 def test_orchestrator_closes_figures_after_writer_failure(

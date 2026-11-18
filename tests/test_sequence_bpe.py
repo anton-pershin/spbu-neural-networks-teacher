@@ -31,6 +31,19 @@ def test_toy_training_matches_hand_calculated_trace() -> None:
     result = train_toy()
 
     assert len(result.initial_vocabulary) == 11
+    assert result.initial_vocabulary == (
+        "d",
+        "e",
+        "i",
+        "l",
+        "n",
+        "o",
+        "r",
+        "s",
+        "t",
+        "w",
+        END_OF_WORD,
+    )
     assert weighted_token_count(result.initial_corpus) == 95
     assert len(result.steps) == 12
     assert [(step.pair, step.token, step.frequency) for step in result.steps[:3]] == [
@@ -39,6 +52,8 @@ def test_toy_training_matches_hand_calculated_trace() -> None:
         (("est", END_OF_WORD), f"est{END_OF_WORD}", 9),
     ]
     assert len(result.final_vocabulary) == 23
+    assert result.final_vocabulary[:11] == result.initial_vocabulary
+    assert result.final_vocabulary[11:] == tuple(step.token for step in result.steps)
     assert weighted_token_count(result.final_corpus) == 22
     assert training_vocabulary_sizes(result)[0] == 11
     assert training_vocabulary_sizes(result)[-1] == 23
@@ -60,6 +75,15 @@ def test_overlapping_pair_is_replaced_from_left_to_right() -> None:
 def test_equal_pair_counts_use_lexicographic_tie_breaking() -> None:
     result = train_bpe(
         (WordFrequency("cd", 1), WordFrequency("ab", 1)),
+        1,
+    )
+
+    assert result.steps[0].pair == ("a", "b")
+
+
+def test_tie_breaking_uses_second_token_when_first_tokens_match() -> None:
+    result = train_bpe(
+        (WordFrequency("ac", 1), WordFrequency("ab", 1)),
         1,
     )
 
@@ -209,7 +233,7 @@ def test_frequent_tokens_and_unseen_examples_come_from_results() -> None:
 
 @pytest.mark.parametrize(
     "checkpoints",
-    [(1, 0), (0, 0), (-1,), (13,)],
+    [(1, 0), (0, 0), (-1,), (13,), (1, 2)],
 )
 def test_invalid_checkpoints_have_clear_error(checkpoints: tuple[int, ...]) -> None:
     with pytest.raises(ValueError, match="checkpoints"):

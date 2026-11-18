@@ -10,6 +10,8 @@ hydra_dir: ${user_settings.hydra_dir}
 report:
   title: Byte-pair encoding
   artifact_name: bpe.html
+  toy_figure_artifact_name: bpe_toy_dynamics
+  large_figure_artifact_name: bpe_large_corpus_compression
 
 toy:
   corpus:

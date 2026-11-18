@@ -113,7 +113,7 @@ def _sample_table(
     )
 
 
-def _toy_figure(training: BPETraining) -> FigureModel:
+def _toy_figure(training: BPETraining, artifact_name: str) -> FigureModel:
     steps = np.arange(len(training.steps) + 1)
     figure, (vocabulary_axis, token_axis) = plt.subplots(1, 2, figsize=(9, 3.6))
     vocabulary_axis.plot(
@@ -129,7 +129,7 @@ def _toy_figure(training: BPETraining) -> FigureModel:
         axis.set_xticks(steps)
         axis.grid(True, alpha=0.3)
     figure.tight_layout()
-    return FigureModel(figure=figure, artifact_name="bpe_toy_dynamics")
+    return FigureModel(figure=figure, artifact_name=artifact_name)
 
 
 def _chapter_label(chapters: tuple[int, ...]) -> str:
@@ -161,7 +161,7 @@ def _checkpoint_table(result: LargeExperimentResult) -> str:
     )
 
 
-def _large_figure(result: LargeExperimentResult) -> FigureModel:
+def _large_figure(result: LargeExperimentResult, artifact_name: str) -> FigureModel:
     checkpoints = result.evaluation.checkpoints
     vocabulary_sizes = [item.vocabulary_size for item in checkpoints]
     baseline_training = checkpoints[0].training_token_count
@@ -200,7 +200,7 @@ def _large_figure(result: LargeExperimentResult) -> FigureModel:
     axis.grid(True, alpha=0.3)
     axis.legend()
     figure.tight_layout()
-    return FigureModel(figure=figure, artifact_name="bpe_large_corpus_compression")
+    return FigureModel(figure=figure, artifact_name=artifact_name)
 
 
 def _sentence_checkpoints(result: LargeExperimentResult) -> str:
@@ -256,11 +256,32 @@ def _unseen_words_table(result: LargeExperimentResult) -> str:
     )
 
 
+def _lowest_note(toy: ToyExperimentResult) -> str:
+    lowest = next((item for item in toy.samples if item.word == "lowest"), None)
+    if lowest is None:
+        return ""
+    expected_tokens = ("low", f"est{END_OF_WORD}")
+    if lowest.tokens == expected_tokens:
+        return (
+            "<p><code>lowest</code> is absent from training. It reuses "
+            "the learned <code>low</code> and word-final "
+            "<code>est</code> tokens.</p>"
+        )
+    return (
+        "<p>At the configured merge count, <code>lowest</code> tokenizes as "
+        f"{_tokens_markup(lowest.tokens)}. It has not yet reached the "
+        "production 12-merge form <code>low</code> plus word-final "
+        "<code>est</code>.</p>"
+    )
+
+
 def build_bpe_report(
     toy: ToyExperimentResult,
     large: LargeExperimentResult,
     title: str,
     artifact_name: str,
+    toy_figure_artifact_name: str = "bpe_toy_dynamics",
+    large_figure_artifact_name: str = "bpe_large_corpus_compression",
 ) -> ReportModel:
     """Build the complete two-part BPE teaching report."""
     if not large.evaluation.checkpoints:
@@ -310,11 +331,7 @@ def build_bpe_report(
             _toy_trace(toy.training),
             "<h3>Applying the learned rules</h3>",
             _sample_table(toy.initial_samples, toy.samples),
-            (
-                "<p><code>lowest</code> is absent from training. It reuses "
-                "the learned <code>low</code> and word-final "
-                "<code>est</code> tokens.</p>"
-            ),
+            _lowest_note(toy),
             "</section>",
             '<section id="large-example">',
             "<h2>2. What BPE achieves on a larger corpus</h2>",
@@ -375,6 +392,9 @@ def build_bpe_report(
     return ReportModel(
         title=title,
         html_content=html_content,
-        figures=(_toy_figure(toy.training), _large_figure(large)),
+        figures=(
+            _toy_figure(toy.training, toy_figure_artifact_name),
+            _large_figure(large, large_figure_artifact_name),
+        ),
         artifact_name=artifact_name,
     )
