@@ -1,0 +1,34 @@
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
+
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}
+
+corpus:
+  title: Alice's Adventures in Wonderland
+  resource: carroll-alice.txt
+  sha256: 5ce9042c0d8536b072b61d4c7c4e6d70c72d9dbb5f3d816261326d9280749266
+split:
+  seed: 42
+  training_fraction: 0.70
+  validation_fraction: 0.15
+minimum_token_count: 2
+orders: [1, 2, 3]
+smoothing_alphas: [0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0]
+probability_queries:
+  - order: 1
+    context: []
+  - order: 2
+    context: [the]
+  - order: 3
+    context: [of, the]
+top_k: 5
+generation:
+  seeds: [7, 42, 123]
+  max_tokens: 30
+report:
+  title: N-gram language models
+  artifact_name: ngram.html
