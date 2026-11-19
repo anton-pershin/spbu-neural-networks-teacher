@@ -156,6 +156,16 @@ flowchart LR
   B -- "Report model" --> C["Report writer"]
 ```
 
+**BPTT instability — `bptt_instability.py` orchestrator**
+
+```mermaid
+flowchart LR
+  O["BPTT instability orchestrator"] -. invokes .-> P["Synthetic task and settings producer"]
+  P -- "Validated audit settings" --> T["Recurrent gradient auditor"]
+  T -- "Gradient curves and numerical diagnostics" --> B["BPTT report builder"]
+  B -- "Report model" --> C["Report writer"]
+```
+
 #### 4.2. Core components
 
 **Orchestrators and pipeline-specific filters.** Each orchestrator is a thin Hydra entry point at the path shown below. It resolves configuration, constructs the filters, connects their pipes, and invokes them in the order shown in section 4.1. It contains no numerical experiment, figure-rendering, or report-persistence logic.
@@ -172,6 +182,7 @@ flowchart LR
 | `spbunn/scripts/mlp_depth_experiment.py` | Generate function-regression datasets and depth-sweep settings | Search hyperparameters; train deep plain ReLU models across depths and seeds; collect predictions and errors | MLP depth report builder |
 | `spbunn/scripts/bpe.py` | Create the toy word frequencies; load and split the bundled book; construct merge, checkpoint, and sample settings | Learn ordered BPE merges; tokenize samples and held-out text; calculate checkpoint metrics | Two-part BPE report builder |
 | `spbunn/scripts/ngram.py` | Load and hash-check the offline NLTK Alice corpus; preprocess sentences and construct splits, vocabulary, and experiment settings | Train count-based n-gram models; select smoothing; evaluate perplexity and sparsity; calculate conditional distributions and generate samples | N-gram report builder |
+| `spbunn/scripts/bptt_instability.py` | Validate synthetic copy-task, adding-task, initialization, seed, length, and dtype-audit settings | Generate deterministic batches; unroll vanilla RNNs; measure retained hidden-state adjoints and numerical diagnostics | BPTT instability report builder |
 
 Producers only generate or load experiment input. Transformers only compute numerical results. Each report builder is a reducer that converts its pipeline's results into a report model containing HTML content, figure objects, and artifact names. Report builders may share presentation utilities but own their pipeline-specific explanatory content. Reusable model, training, and numerical utilities are explicit dependencies of producer and transformer filters; they do not write artifacts or own pipeline orchestration.
 
@@ -197,8 +208,9 @@ Producers only generate or load experiment input. Transformers only compute nume
 | M4 | Convolution pipeline | Done | `simple_convolution.py` runs as a Hydra-configured pipeline and produces a complete HTML report and figures through the shared components. |
 | M5 | BPE pipeline | Done | `bpe.py` demonstrates token synthesis on a complete toy trace and evaluates a larger bundled corpus on held-out chapters, producing a complete two-part HTML report and figures through the shared components. |
 | M6 | N-gram language-model pipeline | To do | `ngram.py` trains count-based unigram, bigram, and trigram models on an offline corpus and produces a complete HTML report with perplexity, sparsity, conditional-probability, and generation examples through the shared components. |
+| M7 | Recurrent networks | To do | `bptt_instability.py` demonstrates exponentially vanishing and exploding BPTT gradients in vanilla RNNs on the copy memory task and adding problem, producing a complete HTML report and figures through the shared components. |
 
-M2, M3, M4, and M5 may proceed concurrently after M1. M6 may proceed independently after M1.
+M2, M3, M4, and M5 may proceed concurrently after M1. M6 and M7 may proceed independently after M1.
 
 ```mermaid
 flowchart TD
@@ -207,4 +219,5 @@ flowchart TD
   M1 --> M4["M4: Convolution pipeline"]
   M1 --> M5["M5: BPE pipeline"]
   M1 --> M6["M6: N-gram language-model pipeline"]
+  M1 --> M7["M7: Recurrent networks"]
 ```
