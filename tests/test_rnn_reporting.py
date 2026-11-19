@@ -34,6 +34,10 @@ def test_report_contains_both_experiments_verification_and_scope_limits() -> Non
         assert "forward finite=" in html
         assert "backward finite=" in html
         assert "valid=" in html
+        assert "<th>g(5)/g(0)</th>" in html
+        assert "<th>g(19)/g(0)</th>" in html
+        assert "<th>g(200)/g(0)</th>" not in html
+        assert "<td>NaN</td>" not in html
         assert "not universal rankings" in html
         assert "does not claim that every reasonable initialization" in html
         assert "truncated BPTT, gradient clipping, LSTMs, or model" in html

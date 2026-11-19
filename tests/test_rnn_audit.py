@@ -12,7 +12,7 @@ from spbunn.rnn.audit import (
     audit_gradients,
     build_recurrent_model,
 )
-from spbunn.rnn.tasks import generate_adding_batch
+from spbunn.rnn.tasks import generate_adding_batch, generate_copy_batch
 
 
 def test_orthogonal_xavier_and_matched_dtype_initialization() -> None:
@@ -216,6 +216,41 @@ def test_missing_retained_gradient_is_an_explicit_error() -> None:
     state = torch.ones(1, 2, requires_grad=True)
     with pytest.raises(RuntimeError, match="Missing retained"):
         _state_gradient_norms((state,))
+
+
+def test_task_length_must_match_batch_time_dimension() -> None:
+    adding_batch = generate_adding_batch(
+        length=2, batch_size=2, seed=8, dtype=torch.float32
+    )
+    with pytest.raises(ValueError, match="inconsistent with the batch time"):
+        audit_gradients(
+            task="adding",
+            batch=adding_batch,
+            initialization="default",
+            seed=7,
+            task_length=3,
+            hidden_size=2,
+            dtype=torch.float32,
+        )
+
+    copy_batch = generate_copy_batch(
+        symbol_count=8,
+        memorize_length=3,
+        gap=5,
+        batch_size=2,
+        seed=8,
+        dtype=torch.float32,
+    )
+    with pytest.raises(ValueError, match="inconsistent with the batch time"):
+        audit_gradients(
+            task="copy",
+            batch=copy_batch,
+            initialization="default",
+            seed=7,
+            task_length=6,
+            hidden_size=2,
+            dtype=torch.float32,
+        )
 
 
 def test_invalid_model_and_audit_settings_are_rejected() -> None:

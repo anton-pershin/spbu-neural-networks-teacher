@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Iterator
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -20,7 +21,20 @@ from spbunn.utils.common import get_project_path
 from tests.rnn_helpers import compose_bptt_config, reduced_bptt_result
 
 
+@pytest.fixture
+def single_thread_torch() -> Iterator[None]:
+    """Use one intra-op thread for exact regressions and restore the setting."""
+    previous = torch.get_num_threads()
+    torch.set_num_threads(1)
+    try:
+        yield
+    finally:
+        torch.set_num_threads(previous)
+
+
+@pytest.mark.usefixtures("single_thread_torch")
 def test_production_seed42_scientific_regressions() -> None:
+    assert torch.get_num_threads() == 1
     default32 = _production_copy("default", torch.float32)
     default64 = _production_copy("default", torch.float64)
     orthogonal32 = _production_copy("orthogonal", torch.float32)

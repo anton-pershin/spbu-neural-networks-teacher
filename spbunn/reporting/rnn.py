@@ -101,6 +101,7 @@ def _method_section(result: BPTTExperimentResult) -> str:
 
 def _copy_section(result: BPTTExperimentResult) -> str:
     settings = result.settings.copy
+    lags = settings.gaps
     rows = "".join(
         _summary_row(
             _primary(
@@ -110,7 +111,7 @@ def _copy_section(result: BPTTExperimentResult) -> str:
                 seed=seed,
                 task_length=max(settings.gaps),
             ),
-            lags=(20, 50, 100, 200),
+            lags=lags,
         )
         for initialization in settings.initializations
         for seed in settings.seeds
@@ -134,8 +135,8 @@ def _copy_section(result: BPTTExperimentResult) -> str:
         "are numerical underflow outcomes, not mathematical claims that the "
         "real-valued derivative is exactly zero.</p>"
         "<table><thead><tr><th>Initialization</th><th>Seed</th><th>Loss</th>"
-        "<th>Max |h|</th><th>Parameter gradient</th><th>g(20)/g(0)</th>"
-        "<th>g(50)/g(0)</th><th>g(100)/g(0)</th><th>g(200)/g(0)</th>"
+        "<th>Max |h|</th><th>Parameter gradient</th>"
+        f"{_ratio_headers(lags)}"
         "<th>Diagnostics</th></tr></thead>"
         f"<tbody>{rows}</tbody></table></section>"
     )
@@ -144,6 +145,7 @@ def _copy_section(result: BPTTExperimentResult) -> str:
 def _adding_section(result: BPTTExperimentResult) -> str:
     settings = result.settings.adding
     longest = max(settings.lengths)
+    lags = (*settings.lengths[:-1], longest - 1)
     rows = "".join(
         _summary_row(
             _primary(
@@ -153,7 +155,7 @@ def _adding_section(result: BPTTExperimentResult) -> str:
                 seed=seed,
                 task_length=longest,
             ),
-            lags=(20, 50, 100, longest - 1),
+            lags=lags,
         )
         for seed in settings.seeds
     )
@@ -176,11 +178,15 @@ def _adding_section(result: BPTTExperimentResult) -> str:
         "several orders of magnitude. The last ratio column uses lag "
         f"{longest - 1}, the first input state.</p>"
         "<table><thead><tr><th>Initialization</th><th>Seed</th><th>Loss</th>"
-        "<th>Max |h|</th><th>Parameter gradient</th><th>g(20)/g(0)</th>"
-        "<th>g(50)/g(0)</th><th>g(100)/g(0)</th>"
-        f"<th>g({longest - 1})/g(0)</th><th>Diagnostics</th></tr></thead>"
+        "<th>Max |h|</th><th>Parameter gradient</th>"
+        f"{_ratio_headers(lags)}"
+        "<th>Diagnostics</th></tr></thead>"
         f"<tbody>{rows}</tbody></table></section>"
     )
+
+
+def _ratio_headers(lags: tuple[int, ...]) -> str:
+    return "".join(f"<th>g({lag})/g(0)</th>" for lag in lags)
 
 
 def _summary_row(result: GradientAudit, *, lags: tuple[int, ...]) -> str:

@@ -111,6 +111,25 @@ def audit_gradients(
         task == "adding" and batch.targets.dtype != dtype
     ):
         raise ValueError("The generated batch dtype must match the audit dtype")
+    if (
+        isinstance(task_length, bool)
+        or not isinstance(task_length, int)
+        or task_length < 0
+    ):
+        raise ValueError("The task length must be a non-negative integer")
+    if task == "copy":
+        if batch.targets.ndim != 2:
+            raise ValueError("Copy targets must have batch and reproduction dimensions")
+        expected_time = 2 * batch.targets.shape[1] + task_length + 1
+    else:
+        if batch.targets.ndim != 1:
+            raise ValueError("Adding targets must have only a batch dimension")
+        expected_time = task_length
+    if batch.inputs.shape[1] != expected_time:
+        raise ValueError(
+            "The task length metadata is inconsistent with the batch time dimension: "
+            f"expected {expected_time}, got {batch.inputs.shape[1]}"
+        )
 
     model = build_recurrent_model(
         input_size=batch.inputs.shape[-1],
