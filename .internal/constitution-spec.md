@@ -146,6 +146,16 @@ flowchart LR
   B -- "Report model" --> C["Report writer"]
 ```
 
+**N-gram language model — `ngram.py` orchestrator**
+
+```mermaid
+flowchart LR
+  O["N-gram orchestrator"] -. invokes .-> P["Offline corpus and settings producer"]
+  P -- "Corpus splits, vocabulary, and experiment settings" --> T["N-gram trainer and evaluator"]
+  T -- "Metrics, probability distributions, and samples" --> B["N-gram report builder"]
+  B -- "Report model" --> C["Report writer"]
+```
+
 #### 4.2. Core components
 
 **Orchestrators and pipeline-specific filters.** Each orchestrator is a thin Hydra entry point at the path shown below. It resolves configuration, constructs the filters, connects their pipes, and invokes them in the order shown in section 4.1. It contains no numerical experiment, figure-rendering, or report-persistence logic.
@@ -161,6 +171,7 @@ flowchart LR
 | `spbunn/scripts/mlp_width_experiment.py` | Generate function-regression datasets and width-sweep settings | Search hyperparameters; train shallow ReLU models across widths and seeds; collect predictions and errors | MLP width report builder |
 | `spbunn/scripts/mlp_depth_experiment.py` | Generate function-regression datasets and depth-sweep settings | Search hyperparameters; train deep plain ReLU models across depths and seeds; collect predictions and errors | MLP depth report builder |
 | `spbunn/scripts/bpe.py` | Create the toy word frequencies; load and split the bundled book; construct merge, checkpoint, and sample settings | Learn ordered BPE merges; tokenize samples and held-out text; calculate checkpoint metrics | Two-part BPE report builder |
+| `spbunn/scripts/ngram.py` | Load and hash-check the offline NLTK Alice corpus; preprocess sentences and construct splits, vocabulary, and experiment settings | Train count-based n-gram models; select smoothing; evaluate perplexity and sparsity; calculate conditional distributions and generate samples | N-gram report builder |
 
 Producers only generate or load experiment input. Transformers only compute numerical results. Each report builder is a reducer that converts its pipeline's results into a report model containing HTML content, figure objects, and artifact names. Report builders may share presentation utilities but own their pipeline-specific explanatory content. Reusable model, training, and numerical utilities are explicit dependencies of producer and transformer filters; they do not write artifacts or own pipeline orchestration.
 
@@ -185,8 +196,9 @@ Producers only generate or load experiment input. Transformers only compute nume
 | M3 | MLP architecture and propagation pipelines | Done | `mlp_width_experiment.py`, `mlp_depth_experiment.py`, `hidden_norms_propagation.py`, and `balduzzi_analysis.py` run as Hydra-configured pipelines and produce complete HTML reports and figures through the shared components. |
 | M4 | Convolution pipeline | Done | `simple_convolution.py` runs as a Hydra-configured pipeline and produces a complete HTML report and figures through the shared components. |
 | M5 | BPE pipeline | Done | `bpe.py` demonstrates token synthesis on a complete toy trace and evaluates a larger bundled corpus on held-out chapters, producing a complete two-part HTML report and figures through the shared components. |
+| M6 | N-gram language-model pipeline | To do | `ngram.py` trains count-based unigram, bigram, and trigram models on an offline corpus and produces a complete HTML report with perplexity, sparsity, conditional-probability, and generation examples through the shared components. |
 
-M2, M3, M4, and M5 may proceed concurrently after M1.
+M2, M3, M4, and M5 may proceed concurrently after M1. M6 may proceed independently after M1.
 
 ```mermaid
 flowchart TD
@@ -194,4 +206,5 @@ flowchart TD
   M1 --> M3["M3: MLP architecture and propagation pipelines"]
   M1 --> M4["M4: Convolution pipeline"]
   M1 --> M5["M5: BPE pipeline"]
+  M1 --> M6["M6: N-gram language-model pipeline"]
 ```

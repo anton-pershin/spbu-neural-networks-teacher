@@ -1,0 +1,10 @@
+defaults:
+  - config_ngram
+  - _self_
+
+generation:
+  seeds: [7, 42]
+  max_tokens: 12
+report:
+  title: Test n-gram language models
+  artifact_name: test_ngram.html

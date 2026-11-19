@@ -4,7 +4,7 @@
 
 The reporting package separates pipeline-specific content from artifact persistence. Producers and transformers compute experiment results. A report builder converts those results into a report model. `ReportWriter` is the single component that writes the HTML report and its figures.
 
-M1 provides this interface. M2 connects the three optimization scripts, and M3 connects the four MLP architecture and propagation scripts. Migration of the remaining M4 convolution script is outside those scopes.
+M1 provides this interface. M2 connects the three optimization scripts, M3 connects the four MLP architecture and propagation scripts, M4 connects the convolution pipeline, M5 connects the BPE pipeline, and M6 connects the n-gram language-model pipeline.
 
 ## Models
 

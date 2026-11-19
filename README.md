@@ -2,7 +2,7 @@
 
 Executable teaching materials for the Neural Networks course at SpbU. The repository uses Hydra for configuration and shared report components for HTML, SVG, and PNG outputs.
 
-> **Milestone status:** M1 provides the project and reporting foundation. M2 provides the schedulers, loss-landscape, and simple loss-optimization pipelines. M3 provides the MLP width, MLP depth, hidden-propagation, and Balduzzi HTML-reporting pipelines. M4 provides the simple convolution HTML-reporting pipeline. M5 provides the two-part BPE pipeline.
+> **Milestone status:** M1 provides the project and reporting foundation. M2 provides the schedulers, loss-landscape, and simple loss-optimization pipelines. M3 provides the MLP width, MLP depth, hidden-propagation, and Balduzzi HTML-reporting pipelines. M4 provides the simple convolution HTML-reporting pipeline. M5 provides the two-part BPE pipeline. M6 provides the offline n-gram language-model pipeline.
 
 ## Repository structure
 
@@ -13,6 +13,8 @@ config/                    Hydra pipeline and common configuration
 data/                      Bundled public-domain BPE corpus and source notices
 docs/                      Component and usage documentation
 spbunn/                    Python package
+  data/                    Hash-checked offline corpus and provenance
+  ngram/                   N-gram corpus, count models, evaluation, and sampling
   optimization/            Numerical filters and shared plotting helpers
   mlp/                     MLP models, architecture experiments, and propagation filters
   convolution.py           Image producer and repeated-convolution evaluator
@@ -123,6 +125,18 @@ The default run writes `bpe.html`, `bpe_toy_dynamics.svg` or `.png`, and `bpe_la
 
 The corpus and its source notices are in `data/`. Runs need no network access or tokenizer library. See [docs/bpe.md](docs/bpe.md) for the algorithm, preprocessing, production results, configuration overrides, and tests.
 
+## N-gram language-model pipeline
+
+Run the M6 pipeline from a source checkout:
+
+```bash
+python -m spbunn.scripts.ngram
+```
+
+The pipeline uses a hash-checked Alice corpus vendored from a pinned official NLTK Gutenberg archive. It needs no NLTK installation or network access. The default `ngram.html` report explains unigram, bigram, and trigram models with conditional-probability tables, perplexity and sparsity figures, and all seeded generation samples. It explains `<unk>`, starts bigram samples from `alice` and trigram samples from `alice was`, includes a sparse trigram probability display, and uses enlarged figure text. Four figures are written beside the report through the shared writer.
+
+Use `config/config_test_ngram.yaml` for a reduced-generation test run. See [docs/ngram.md](docs/ngram.md) for source hashes, preprocessing, model formulas, configuration, exact example results, artifact names, and tests.
+
 ## Reporting
 
 A report builder creates a `ReportModel`. The shared `ReportWriter` then creates the run directory, writes the figures, adds their final file names to the HTML, and writes the HTML report.
@@ -162,6 +176,6 @@ python -m pytest
 python -m build
 ```
 
-The checks cover the M1 foundation, M2 optimization pipelines, M3 architecture and propagation pipelines, M4 convolution pipeline, M5 BPE pipeline, and tests. They intentionally do not reformat or lint unrelated legacy numerical modules. The tests include exact checks below, at, and above the 102,400-byte SVG threshold, embedded MathJax support, numerical behavior, deterministic BPE traces, held-out tokenization, and end-to-end pipeline output.
+The checks cover the M1 foundation, M2 optimization pipelines, M3 architecture and propagation pipelines, the M4 convolution pipeline, the M5 BPE pipeline, the M6 n-gram pipeline, and tests. They intentionally do not reformat or lint unrelated legacy numerical modules. The tests include exact checks below, at, and above the 102,400-byte SVG threshold, embedded MathJax support, numerical behavior, deterministic BPE traces, held-out tokenization, corpus integrity, probability distributions, deterministic generation, and end-to-end pipeline output.
 
 The GitHub Actions **CI/CD** workflow runs these checks on pushes to `main` and on pull requests. It builds the source and wheel distributions and uploads them as the `python-distributions` workflow artifact.
