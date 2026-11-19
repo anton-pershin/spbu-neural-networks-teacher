@@ -1,0 +1,30 @@
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
+
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}
+
+batch_size: 128
+hidden_size: 64
+primary_dtype: float32
+verification:
+  enabled: true
+  dtype: float64
+copy_task:
+  symbol_count: 8
+  memorize_length: 10
+  gaps: [20, 50, 100, 200]
+  initializations: [default, orthogonal]
+  seeds: [7, 42, 123]
+  data_seed: 1200
+adding_task:
+  lengths: [20, 50, 100, 200]
+  initialization: xavier_tanh
+  seeds: [7, 42, 123]
+  data_seed: 1200
+report:
+  title: BPTT instability in vanilla RNNs
+  artifact_name: bptt_instability.html

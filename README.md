@@ -2,7 +2,7 @@
 
 Executable teaching materials for the Neural Networks course at SpbU. The repository uses Hydra for configuration and shared report components for HTML, SVG, and PNG outputs.
 
-> **Milestone status:** M1 provides the project and reporting foundation. M2 provides the schedulers, loss-landscape, and simple loss-optimization pipelines. M3 provides the MLP width, MLP depth, hidden-propagation, and Balduzzi HTML-reporting pipelines. M4 provides the simple convolution HTML-reporting pipeline. M5 provides the two-part BPE pipeline. M6 provides the offline n-gram language-model pipeline.
+> **Milestone status:** M1 provides the project and reporting foundation. M2 provides the schedulers, loss-landscape, and simple loss-optimization pipelines. M3 provides the MLP width, MLP depth, hidden-propagation, and Balduzzi HTML-reporting pipelines. M4 provides the simple convolution HTML-reporting pipeline. M5 provides the two-part BPE pipeline. M6 provides the offline n-gram language-model pipeline. M7 provides the vanilla-RNN BPTT instability audit.
 
 ## Repository structure
 
@@ -19,6 +19,7 @@ spbunn/                    Python package
   mlp/                     MLP models, architecture experiments, and propagation filters
   convolution.py           Image producer and repeated-convolution evaluator
   reporting/               Report models, builders, and shared report writer
+  rnn/                     Synthetic tasks and retained-state BPTT audits
   scripts/                 Executable experiment scripts
   sequence/                BPE training, tokenization, and corpus evaluation
   utils/                   Shared project utilities
@@ -137,6 +138,20 @@ The pipeline uses a hash-checked Alice corpus vendored from a pinned official NL
 
 Use `config/config_test_ngram.yaml` for a reduced-generation test run. See [docs/ngram.md](docs/ngram.md) for source hashes, preprocessing, model formulas, configuration, exact example results, artifact names, and tests.
 
+## BPTT instability pipeline
+
+Run the M7 vanilla-RNN gradient audit from a source checkout:
+
+```bash
+python -m spbunn.scripts.bptt_instability
+```
+
+The pipeline uses deterministic synthetic batches and needs no external dataset or network access. The copy memory task demonstrates exponentially vanishing hidden-state adjoints under default and orthogonal initializations. The adding problem demonstrates exponentially growing adjoints under the documented Xavier `tanh` initialization while forward states remain bounded. Models are audited with one backward pass and are not trained.
+
+The default run writes `bptt_instability.html` and two log-scaled figures, `bptt_copy_gradient_flow` and `bptt_adding_gradient_flow`, into `result_dir`. Exact zeros remain visible in numerical tables; only the figures use a disclosed display floor. Matched-weight float64 checks distinguish numerical underflow from the underlying gradient trend.
+
+Use `config/config_test_bptt_instability.yaml` for a reduced test run. See [docs/bptt_instability.md](docs/bptt_instability.md) for task and initialization definitions, audit equations, production observations, configuration, artifact names, and tests.
+
 ## Reporting
 
 A report builder creates a `ReportModel`. The shared `ReportWriter` then creates the run directory, writes the figures, adds their final file names to the HTML, and writes the HTML report.
@@ -176,6 +191,6 @@ python -m pytest
 python -m build
 ```
 
-The checks cover the M1 foundation, M2 optimization pipelines, M3 architecture and propagation pipelines, the M4 convolution pipeline, the M5 BPE pipeline, the M6 n-gram pipeline, and tests. They intentionally do not reformat or lint unrelated legacy numerical modules. The tests include exact checks below, at, and above the 102,400-byte SVG threshold, embedded MathJax support, numerical behavior, deterministic BPE traces, held-out tokenization, corpus integrity, probability distributions, deterministic generation, and end-to-end pipeline output.
+The checks cover the M1 foundation, M2 optimization pipelines, M3 architecture and propagation pipelines, the M4 convolution pipeline, the M5 BPE pipeline, the M6 n-gram pipeline, the M7 BPTT instability audit, and tests. They intentionally do not reformat or lint unrelated legacy numerical modules. The tests include exact checks below, at, and above the 102,400-byte SVG threshold, embedded MathJax support, numerical behavior, deterministic BPE traces, held-out tokenization, corpus integrity, probability distributions, deterministic generation, independent recurrent-adjoint checks, and end-to-end pipeline output.
 
 The GitHub Actions **CI/CD** workflow runs these checks on pushes to `main` and on pull requests. It builds the source and wheel distributions and uploads them as the `python-distributions` workflow artifact.

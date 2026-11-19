@@ -1,0 +1,15 @@
+defaults:
+  - config_bptt_instability
+  - _self_
+
+batch_size: 8
+hidden_size: 8
+copy_task:
+  gaps: [5, 20]
+  seeds: [7, 42]
+adding_task:
+  lengths: [10, 20]
+  seeds: [7, 42]
+report:
+  title: Test BPTT instability in vanilla RNNs
+  artifact_name: test_bptt_instability.html
