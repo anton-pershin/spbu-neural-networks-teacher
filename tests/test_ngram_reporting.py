@@ -32,8 +32,13 @@ def test_report_contains_all_educational_results_and_four_figures() -> None:
         assert "groups many different original words" in html
         assert "abide" in html and "absence" in html
         assert "<th>Initial context</th>" in html
+        assert "<th>Generated continuation</th>" in html
         assert "empty (no previous token)" in html
         assert "<code>alice was</code>" in html
+        assert "<tr><td>2</td><td><code>alice</code></td>" in html
+        assert "<tr><td>3</td><td><code>alice was</code></td>" in html
+        assert "<tr><td>2</td><td><code>&lt;bos&gt;</code></td>" not in html
+        assert "<tr><td>3</td><td><code>&lt;bos&gt; &lt;bos&gt;</code></td>" not in html
         walkthrough_sample = next(
             sample
             for sample in result.generated_samples
@@ -42,6 +47,7 @@ def test_report_contains_all_educational_results_and_four_figures() -> None:
         first, second, third = (
             escape(token) for token in walkthrough_sample.tokens[:3]
         )
+        assert "real-word initial context <code>alice</code>" in html
         assert f"real-word context <code>{first}</code>" in html
         assert f"context <code>{second}</code> produces <code>{third}</code>" in html
         assert "This observation is specific" in html
@@ -57,7 +63,7 @@ def test_report_contains_all_educational_results_and_four_figures() -> None:
                 assert escape(" ".join(sample.tokens)) in html
         assert "(empty sequence)" in html
         assert "maximum token limit" in html
-        assert "said alice because four sense repeated turning call it" in html
+        assert "could chin presently being ordered grin and once" in html
     finally:
         for figure in report.figures:
             plt.close(figure.figure)
@@ -66,7 +72,8 @@ def test_report_contains_all_educational_results_and_four_figures() -> None:
 def test_report_escapes_source_tokens_and_generated_text() -> None:
     result = production_ngram_result()
     malicious_sample = GeneratedSample(
-        order=1,
+        order=2,
+        initial_context=("<script>alert(3)</script>",),
         seed=999,
         tokens=("<img src=x onerror=alert(1)>",),
         stop_reason="eos",
@@ -88,9 +95,11 @@ def test_report_escapes_source_tokens_and_generated_text() -> None:
         html = report.html_content
         assert "<script>alert(1)</script>" not in html
         assert "<script>alert(2)</script>" not in html
+        assert "<script>alert(3)</script>" not in html
         assert "<img src=x onerror=alert(1)>" not in html
         assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
         assert "&lt;script&gt;alert(2)&lt;/script&gt;" in html
+        assert "&lt;script&gt;alert(3)&lt;/script&gt;" in html
         assert "&lt;img src=x onerror=alert(1)&gt;" in html
     finally:
         for figure in report.figures:

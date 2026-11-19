@@ -7,6 +7,7 @@ from hydra import compose, initialize_config_dir
 from omegaconf import DictConfig
 
 from spbunn.ngram.pipeline import (
+    GenerationContext,
     NGramExperimentInput,
     NGramExperimentResult,
     NGramSettings,
@@ -58,6 +59,11 @@ def tiny_experiment() -> NGramExperimentInput:
         ),
         top_k=3,
         generation_seeds=(0,),
+        generation_contexts=(
+            GenerationContext(order=1, context=()),
+            GenerationContext(order=2, context=("the",)),
+            GenerationContext(order=3, context=("the", "cat")),
+        ),
         maximum_generated_tokens=4,
     )
     return NGramExperimentInput(

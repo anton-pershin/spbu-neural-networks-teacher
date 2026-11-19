@@ -62,6 +62,7 @@ class GeneratedSample:
     """One unedited seeded sample and the reason generation stopped."""
 
     order: int
+    initial_context: Context
     seed: int
     tokens: tuple[Token, ...]
     stop_reason: StopReason
@@ -239,16 +240,34 @@ def calculate_top_k_distribution(
 
 
 def generate_sample(
-    model: NGramModel, alpha: float, seed: int, max_tokens: int
+    model: NGramModel,
+    alpha: float,
+    seed: int,
+    max_tokens: int,
+    *,
+    initial_context: Context,
 ) -> GeneratedSample:
-    """Sample from the full smoothed distribution until EOS or a length limit."""
+    """Sample from an explicit initial context until EOS or a length limit."""
     _validate_alpha(alpha)
     if seed < 0:
         raise ValueError("The generation seed must be non-negative")
     if max_tokens <= 0:
         raise ValueError("The generation token limit must be positive")
+    context = tuple(initial_context)
+    if len(context) != model.order - 1:
+        raise ValueError(
+            f"Order {model.order} generation requires a context of length "
+            f"{model.order - 1}"
+        )
+    if any(token not in model.vocabulary for token in context):
+        raise ValueError(
+            "Generation context tokens must be in the prediction vocabulary"
+        )
+    if EOS_TOKEN in context:
+        raise ValueError(
+            "The generation context must not contain the end-of-sentence token"
+        )
     random_generator = Random(seed)
-    context = (BOS_TOKEN,) * (model.order - 1)
     generated: list[Token] = []
     stop_reason: StopReason = "length_limit"
     for _ in range(max_tokens):
@@ -265,6 +284,7 @@ def generate_sample(
         context = (context + (token,))[-(model.order - 1) :] if model.order > 1 else ()
     return GeneratedSample(
         order=model.order,
+        initial_context=tuple(initial_context),
         seed=seed,
         tokens=tuple(generated),
         stop_reason=stop_reason,

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
 
-from spbunn.ngram.model import BOS_TOKEN, GeneratedSample, TopKDistribution
+from spbunn.ngram.model import GeneratedSample, TopKDistribution
 from spbunn.ngram.pipeline import NGramExperimentResult, NGramOrderResult
 from spbunn.reporting.models import FigureModel, ReportModel
 
@@ -198,13 +198,12 @@ def _generation_section(result: NGramExperimentResult) -> str:
         "word. For example, after the words <code>alice was</code>, a trigram "
         "uses exactly those two words as its context and assigns a probability "
         "to every possible next word.</p>"
-        "<p>At the beginning of a new sentence there are no previous words. "
-        "The special marker <code>&lt;bos&gt;</code> means beginning of "
-        "sentence and fills the missing context positions. It is not an "
-        "English word and cannot be generated. The unigram starts with an "
-        "empty context, the bigram with one <code>&lt;bos&gt;</code>, and the "
-        "trigram with two <code>&lt;bos&gt;</code> markers. As words are "
-        "generated, real words enter the context and displace these markers.</p>"
+        "<p>The unigram has no context, so its initial context is empty. "
+        "The bigram and trigram rows instead start from actual words. These "
+        "initial words are inputs, so the table shows them separately from "
+        "the generated continuation. The <code>&lt;bos&gt;</code> marker is "
+        "still used for first-word training and evaluation events, but it is "
+        "not the initial context for these samples.</p>"
         f"{_generation_walkthrough(result.generated_samples)}"
         "<p>For every row below, the model samples one token from the full "
         "smoothed distribution, appends it, shifts the context, and repeats. "
@@ -212,7 +211,7 @@ def _generation_section(result: NGramExperimentResult) -> str:
         f"{result.settings.maximum_generated_tokens} tokens. Output is not "
         "corrected or filtered for readability.</p>"
         "<table><thead><tr><th>Order</th><th>Initial context</th><th>Seed</th>"
-        "<th>Generated text</th><th>Stop reason</th></tr></thead>"
+        "<th>Generated continuation</th><th>Stop reason</th></tr></thead>"
         f"<tbody>{rows}</tbody></table>"
         "</section>"
     )
@@ -225,22 +224,22 @@ def _generation_walkthrough(samples: tuple[GeneratedSample, ...]) -> str:
     )
     if sample is None:
         return ""
+    initial = escape(" ".join(sample.initial_context))
     first, second, third = (escape(token) for token in sample.tokens[:3])
     return (
         f"<p>For the bigram sample with seed {sample.seed}, the first "
-        "prediction uses <code>&lt;bos&gt;</code>, and this seeded draw "
-        f"produces <code>{first}</code>. The next prediction uses the "
+        f"prediction uses the real-word initial context <code>{initial}</code> "
+        f"and produces <code>{first}</code>. The next prediction uses the "
         f"real-word context <code>{first}</code> and produces "
         f"<code>{second}</code>; then the context <code>{second}</code> "
         f"produces <code>{third}</code>.</p>"
     )
 
 
-def _initial_context(order: int) -> str:
-    if order == 1:
+def _initial_context(context: tuple[str, ...]) -> str:
+    if not context:
         return "empty (no previous token)"
-    markers = " ".join((BOS_TOKEN,) * (order - 1))
-    return f"<code>{escape(markers)}</code>"
+    return f"<code>{escape(' '.join(context))}</code>"
 
 
 def _sample_row(sample: GeneratedSample) -> str:
@@ -254,7 +253,8 @@ def _sample_row(sample: GeneratedSample) -> str:
         else "maximum token limit"
     )
     return (
-        f"<tr><td>{sample.order}</td><td>{_initial_context(sample.order)}</td>"
+        f"<tr><td>{sample.order}</td>"
+        f"<td>{_initial_context(sample.initial_context)}</td>"
         f"<td>{sample.seed}</td><td><code>{text}</code></td>"
         f"<td>{stop_reason}</td></tr>"
     )

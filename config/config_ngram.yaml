@@ -30,6 +30,13 @@ probability_queries:
 top_k: 5
 generation:
   seeds: [7, 42, 123]
+  initial_contexts:
+    - order: 1
+      context: []
+    - order: 2
+      context: [alice]
+    - order: 3
+      context: [alice, was]
   max_tokens: 30
 report:
   title: N-gram language models

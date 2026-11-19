@@ -133,7 +133,7 @@ Run the M6 pipeline from a source checkout:
 python -m spbunn.scripts.ngram
 ```
 
-The pipeline uses a hash-checked Alice corpus vendored from a pinned official NLTK Gutenberg archive. It needs no NLTK installation or network access. The default `ngram.html` report explains unigram, bigram, and trigram models with conditional-probability tables, perplexity and sparsity figures, and all seeded generation samples. It explains `<unk>` and generation starting contexts with concrete examples, includes a sparse trigram probability display, and uses enlarged figure text. Four figures are written beside the report through the shared writer.
+The pipeline uses a hash-checked Alice corpus vendored from a pinned official NLTK Gutenberg archive. It needs no NLTK installation or network access. The default `ngram.html` report explains unigram, bigram, and trigram models with conditional-probability tables, perplexity and sparsity figures, and all seeded generation samples. It explains `<unk>`, starts bigram samples from `alice` and trigram samples from `alice was`, includes a sparse trigram probability display, and uses enlarged figure text. Four figures are written beside the report through the shared writer.
 
 Use `config/config_test_ngram.yaml` for a reduced-generation test run. See [docs/ngram.md](docs/ngram.md) for source hashes, preprocessing, model formulas, configuration, exact example results, artifact names, and tests.
 

@@ -45,6 +45,14 @@ class ProbabilityQuery:
 
 
 @dataclass(frozen=True)
+class GenerationContext:
+    """One explicit real-word initial context for seeded generation."""
+
+    order: int
+    context: Context
+
+
+@dataclass(frozen=True)
 class NGramSettings:
     """Validated numerical settings independent of Hydra."""
 
@@ -57,6 +65,7 @@ class NGramSettings:
     probability_queries: tuple[ProbabilityQuery, ...]
     top_k: int
     generation_seeds: tuple[int, ...]
+    generation_contexts: tuple[GenerationContext, ...]
     maximum_generated_tokens: int
 
     @property
@@ -240,6 +249,19 @@ def produce_ngram_input(cfg: DictConfig) -> NGramExperimentInput:
         validation_fraction=settings.validation_fraction,
     )
     known_tokens = build_training_vocabulary(training, settings.minimum_token_count)
+    unknown_context_tokens = sorted(
+        {
+            token
+            for generation_context in settings.generation_contexts
+            for token in generation_context.context
+            if token not in known_tokens
+        }
+    )
+    if unknown_context_tokens:
+        raise ValueError(
+            "Generation context words must occur in the training vocabulary: "
+            f"{unknown_context_tokens}"
+        )
     return NGramExperimentInput(
         source_title=source_title,
         source_resource=source_resource,
@@ -312,12 +334,13 @@ def evaluate_ngram_experiment(
     )
     samples = tuple(
         generate_sample(
-            models[order],
-            selected_alphas[order],
+            models[generation_context.order],
+            selected_alphas[generation_context.order],
             seed,
             settings.maximum_generated_tokens,
+            initial_context=generation_context.context,
         )
-        for order in settings.orders
+        for generation_context in settings.generation_contexts
         for seed in settings.generation_seeds
     )
     corpus = CorpusStatistics(
@@ -365,6 +388,7 @@ def _parse_settings(cfg: DictConfig) -> NGramSettings:
     )
     if not generation_seeds or any(seed < 0 for seed in generation_seeds):
         raise ValueError("Generation seeds must be non-empty and non-negative")
+    generation_contexts = _parse_generation_contexts(cfg, orders)
     maximum_generated_tokens = _finite_integer(
         cfg.generation.max_tokens, "The generation token limit"
     )
@@ -380,6 +404,7 @@ def _parse_settings(cfg: DictConfig) -> NGramSettings:
         probability_queries=queries,
         top_k=top_k,
         generation_seeds=generation_seeds,
+        generation_contexts=generation_contexts,
         maximum_generated_tokens=maximum_generated_tokens,
     )
 
@@ -400,6 +425,30 @@ def _parse_alphas(cfg: DictConfig) -> tuple[float, ...]:
     if len(set(alphas)) != len(alphas):
         raise ValueError("The smoothing grid must contain unique values")
     return alphas
+
+
+def _parse_generation_contexts(
+    cfg: DictConfig, orders: tuple[int, ...]
+) -> tuple[GenerationContext, ...]:
+    contexts = tuple(
+        GenerationContext(
+            order=_finite_integer(item.order, "The generation context order"),
+            context=tuple(str(token) for token in item.context),
+        )
+        for item in cfg.generation.initial_contexts
+    )
+    if sorted(item.order for item in contexts) != sorted(orders):
+        raise ValueError(
+            "Generation initial contexts must occur exactly once for every "
+            "configured order"
+        )
+    for item in contexts:
+        if len(item.context) != item.order - 1:
+            raise ValueError(
+                f"Order {item.order} generation context requires "
+                f"{item.order - 1} words"
+            )
+    return contexts
 
 
 def _parse_probability_queries(

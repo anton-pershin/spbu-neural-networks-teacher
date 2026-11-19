@@ -188,12 +188,23 @@ def test_production_top_k_and_samples_are_exact_regressions() -> None:
         (sample.order, sample.seed): sample for sample in result.generated_samples
     }
     assert len(samples) == 9
+    expected_contexts = {1: (), 2: ("alice",), 3: ("alice", "was")}
+    assert all(
+        sample.initial_context == expected_contexts[sample.order]
+        for sample in result.generated_samples
+    )
+    assert (
+        " ".join(samples[2, 7].tokens)
+        == "could chin presently being ordered grin and once"
+    )
     assert (
         " ".join(samples[2, 42].tokens)
-        == "said alice because four sense repeated turning call it"
+        == "quite <unk> another earth shouldn't repeating unimportant began in "
+        "<unk> and once"
     )
     assert samples[2, 42].stop_reason == "eos"
     assert not samples[1, 123].tokens
+    assert not samples[2, 123].tokens
     assert samples[3, 7].stop_reason == "length_limit"
     assert len(samples[3, 7].tokens) == 30
 
@@ -214,6 +225,13 @@ def test_configs_compose_common_run_directory(config_name: str) -> None:
         (2, ("the",)),
         (3, ("of", "the")),
         (3, ("the", "caterpillar")),
+    ]
+    assert [
+        (item.order, tuple(item.context)) for item in cfg.generation.initial_contexts
+    ] == [
+        (1, ()),
+        (2, ("alice",)),
+        (3, ("alice", "was")),
     ]
 
 
@@ -242,6 +260,23 @@ def test_configs_compose_common_run_directory(config_name: str) -> None:
         (["generation.seeds=[-0.5]"], "finite integer"),
         (["generation.max_tokens=0"], "token limit"),
         (["generation.max_tokens=30.9"], "finite integer"),
+        (["generation.initial_contexts=[]"], "exactly once"),
+        (
+            [
+                "generation.initial_contexts=["
+                "{order:1,context:[]},{order:2,context:[alice]},"
+                "{order:3,context:[alice]}]"
+            ],
+            "requires 2 words",
+        ),
+        (
+            [
+                "generation.initial_contexts=["
+                "{order:1,context:[]},{order:2,context:[missing]},"
+                "{order:3,context:[alice,was]}]"
+            ],
+            "training vocabulary",
+        ),
         (["probability_queries=[]"], "At least one probability query"),
         (["probability_queries=[{order:4,context:[]}]"], "unconfigured order"),
         (["probability_queries=[{order:2,context:[of,the]}]"], "requires 1 context"),

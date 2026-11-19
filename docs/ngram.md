@@ -95,22 +95,24 @@ The additional trigram example has 14 training events for `the caterpillar`, com
 
 ## Seeded generation
 
-A generation context is the previous word or words used to predict the next word. For example, a trigram after `alice was` uses those two words to assign next-token probabilities. At the start of a new sentence there are no previous words, so `<bos>` (beginning of sentence) fills the missing positions. It is not an English word and cannot be generated. The initial contexts are:
+A generation context is the previous word or words used to predict the next word. This report uses actual input words for the bigram and trigram samples:
 
 | Order | Initial context |
 |---:|---|
 | 1 | Empty; the unigram does not use context |
-| 2 | One `<bos>` marker |
-| 3 | Two `<bos>` markers |
+| 2 | `alice` |
+| 3 | `alice was` |
 
-As words are generated, real words enter the context and displace the markers. For the bigram sample with seed 42, the first prediction uses `<bos>` and produces `said`; the next uses the real-word context `said` and produces `alice`; then the context `alice` produces `because`. The report includes an equivalent walkthrough derived from an available bigram sample and shows the initial context in every generation row.
+Both contexts occur in training: `alice` has 261 bigram events and `alice was` has 13 trigram events. The initial words are inputs, not generated output, so the table shows them separately from the generated continuation. `<bos>` remains a boundary marker for first-word training and evaluation events, but it is not used as the bigram or trigram prompt in this table.
 
-Production generation uses seeds 7, 42, and 123 for every order. At each step, the model samples from the full smoothed distribution, appends the token, shifts the context, and repeats. It stops at `<eos>` or after 30 generated tokens. The report retains empty, incoherent, and length-limited samples without wording corrections or readability filtering. Every row identifies its order, initial context, seed, text, and stop reason.
+For the bigram sample with seed 7, the first prediction uses `alice` and produces `could`; the next uses `could` and produces `chin`; then the context `chin` produces `presently`. The report derives this walkthrough from the stored sample and shows its actual initial context.
 
-One bigram sample with seed 42 is:
+Production generation uses seeds 7, 42, and 123 for every order. At each step, the model samples from the full smoothed distribution, appends the token, shifts the context, and repeats. It stops at `<eos>` or after 30 generated continuation tokens. The report retains empty, incoherent, and length-limited continuations without wording corrections or readability filtering. Every row identifies its order, initial context, seed, continuation, and stop reason.
+
+Starting from `alice`, the bigram continuation with seed 7 is:
 
 ```text
-said alice because four sense repeated turning call it
+could chin presently being ordered grin and once
 ```
 
 The samples demonstrate local word patterns and their limits; they are not presented as coherent writing.
@@ -144,7 +146,7 @@ The shared writer selects SVG at or below 102,400 serialized SVG bytes and PNG o
 
 ## Small test configuration
 
-`config/config_test_ngram.yaml` inherits the production configuration and uses the same real corpus, models, probability queries, and four figures. It reduces generation to seeds 7 and 42 and a 12-token limit, and writes `test_ngram.html`. Integer-valued settings must be finite and integral; fractional values are rejected rather than truncated.
+`config/config_test_ngram.yaml` inherits the production configuration and uses the same real corpus, models, probability queries, initial generation contexts, and four figures. It reduces generation to seeds 7 and 42 and a 12-token continuation limit, and writes `test_ngram.html`. Integer-valued settings must be finite and integral; fractional values are rejected rather than truncated.
 
 ```bash
 python -m spbunn.scripts.ngram \

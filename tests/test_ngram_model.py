@@ -198,6 +198,11 @@ def test_experiment_generation_and_probability_results_are_deterministic() -> No
     assert first.generated_samples == second.generated_samples
     assert first.probability_distributions == second.probability_distributions
     assert len(first.generated_samples) == 3
+    assert [sample.initial_context for sample in first.generated_samples] == [
+        (),
+        ("the",),
+        ("the", "cat"),
+    ]
 
 
 def test_generation_can_stop_immediately_at_eos() -> None:
@@ -208,7 +213,7 @@ def test_generation_can_stop_immediately_at_eos() -> None:
         context_counts={(): 1},
     )
 
-    sample = generate_sample(model, alpha=0.1, seed=0, max_tokens=5)
+    sample = generate_sample(model, alpha=0.1, seed=0, max_tokens=5, initial_context=())
 
     assert not sample.tokens
     assert sample.stop_reason == "eos"
@@ -222,22 +227,24 @@ def test_generation_enforces_length_limit() -> None:
         context_counts={(): 1},
     )
 
-    sample = generate_sample(model, alpha=0.1, seed=0, max_tokens=4)
+    sample = generate_sample(model, alpha=0.1, seed=0, max_tokens=4, initial_context=())
 
     assert sample.tokens == ("a", "a", "a", "a")
     assert sample.stop_reason == "length_limit"
 
 
-def test_bigram_generation_shifts_context(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_bigram_generation_shifts_real_initial_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     model = NGramModel(
         order=2,
-        vocabulary=(EOS_TOKEN, "a"),
+        vocabulary=(EOS_TOKEN, "a", "alice"),
         ngram_counts={
-            (BOS_TOKEN, "a"): 1,
+            ("alice", "a"): 1,
             ("a", "a"): 1,
             ("a", EOS_TOKEN): 1,
         },
-        context_counts={(BOS_TOKEN,): 1, ("a",): 2},
+        context_counts={("alice",): 1, ("a",): 2},
     )
     calls: list[tuple[tuple[str, ...], tuple[float, ...]]] = []
 
@@ -254,12 +261,40 @@ def test_bigram_generation_shifts_context(monkeypatch: pytest.MonkeyPatch) -> No
             return [next(self.outputs)]
 
     monkeypatch.setattr("spbunn.ngram.model.Random", FakeRandom)
-    sample = generate_sample(model, alpha=1.0, seed=9, max_tokens=4)
+    sample = generate_sample(
+        model, alpha=1.0, seed=9, max_tokens=4, initial_context=("alice",)
+    )
 
+    assert sample.initial_context == ("alice",)
     assert sample.tokens == ("a",)
     assert sample.stop_reason == "eos"
-    assert calls[0][1] == (pytest.approx(1 / 3), pytest.approx(2 / 3))
-    assert calls[1][1] == (pytest.approx(0.5), pytest.approx(0.5))
+    assert calls[0][1] == (
+        pytest.approx(1 / 4),
+        pytest.approx(1 / 2),
+        pytest.approx(1 / 4),
+    )
+    assert calls[1][1] == (
+        pytest.approx(2 / 5),
+        pytest.approx(2 / 5),
+        pytest.approx(1 / 5),
+    )
+
+
+def test_generation_rejects_invalid_initial_context() -> None:
+    experiment = tiny_experiment()
+    training = encode_sentences(experiment.training_sentences, experiment.known_tokens)
+    model = fit_ngram_model(training, 2, experiment.prediction_vocabulary)
+
+    with pytest.raises(ValueError, match="requires a context of length 1"):
+        generate_sample(model, alpha=0.1, seed=0, max_tokens=1, initial_context=())
+    with pytest.raises(ValueError, match="prediction vocabulary"):
+        generate_sample(
+            model, alpha=0.1, seed=0, max_tokens=1, initial_context=("missing",)
+        )
+    with pytest.raises(ValueError, match="must not contain the end-of-sentence"):
+        generate_sample(
+            model, alpha=0.1, seed=0, max_tokens=1, initial_context=(EOS_TOKEN,)
+        )
 
 
 def test_model_rejects_invalid_context_and_token() -> None:
