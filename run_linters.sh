@@ -12,7 +12,9 @@ checked_paths=(
   spbunn/optimization/plotting.py
   spbunn/optimization/schedulers.py
   spbunn/reporting
+  spbunn/rnn
   spbunn/scripts/balduzzi_analysis.py
+  spbunn/scripts/bptt_instability.py
   spbunn/scripts/bpe.py
   spbunn/scripts/hidden_norms_propagation.py
   spbunn/scripts/loss_landscape.py

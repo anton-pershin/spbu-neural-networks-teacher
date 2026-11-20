@@ -12,7 +12,7 @@
 | Term | Definition |
 |------|------------|
 | HTML report with LaTeX support | An HTML artifact that renders the pipeline's explanatory content and supports mathematical notation written in LaTeX. |
-| Report model | The in-memory representation of a pipeline's output, containing HTML content, figure objects, and artifact names. |
+| Report model | The in-memory representation of a pipeline's output, containing HTML content, figure objects, artifact names, and optional figure captions. |
 | Report builder | The pipeline-specific component that converts experiment results into a report model. |
 | Report writer | The shared component that writes a report model's HTML and figures to the run directory and applies the SVG/PNG size-threshold rule. |
 
@@ -32,3 +32,16 @@
 | Merge rule | An ordered adjacent token pair, its replacement token, and its learning rank. |
 | End-of-word marker | The special token `</w>` appended to each word to preserve word boundaries during training and tokenization. |
 | Training corpus | The configured ordered words and positive frequencies used to learn BPE merge rules. |
+
+### Recurrent networks
+
+| Term | Definition |
+|------|------------|
+| Vanilla RNN | A recurrent neural network whose hidden state at each step is a shared affine transformation of the input and previous hidden state followed by one element-wise activation. This pipeline uses `tanh`. |
+| Backpropagation through time (BPTT) | Reverse-mode automatic differentiation through the recurrent steps of an unrolled RNN. |
+| Hidden-state adjoint | The derivative of the configured loss with respect to one separate hidden-state tensor in the unrolled recurrence. |
+| Relative gradient norm | The L2 norm of a hidden-state adjoint divided by the final-state adjoint norm for the same sequence, followed by the configured batch average. |
+| Copy memory task | A synthetic task in which a model receives random symbols, a delimiter, a blank gap, and reproduction positions; loss measures reproduction of the original symbols. |
+| Blank gap | The sequence of blank inputs between the delimiter and the reproduction positions in the copy memory task. |
+| Adding problem | A synthetic task in which two marked values in a random sequence must be summed at the final output. |
+| Matched-weight float64 check | A repeated audit that converts the same float32 model and batch to float64 so numerical range effects can be separated from the recurrent gradient trend. |
