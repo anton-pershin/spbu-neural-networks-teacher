@@ -23,13 +23,13 @@ python -m spbunn.scripts.bptt_instability \
 
 The pipeline runs on CPU and needs no network resource or external dataset. Cases execute sequentially. Production uses 128 sequences, 64 hidden units, seeds 7, 42, and 123, and task lengths or gaps 20, 50, 100, and 200.
 
-Exact float32 regression values are pinned to one PyTorch intra-op thread. A 200-step `tanh` recurrence can amplify small BLAS reduction-order differences from other thread counts. To reproduce the documented values, run:
+Exact float32 copy regression values are pinned to one PyTorch intra-op thread. A 200-step `tanh` recurrence can amplify small BLAS reduction-order differences from other thread counts. To reproduce the documented local reference values, run:
 
 ```bash
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python -m spbunn.scripts.bptt_instability
 ```
 
-The scientific regression test applies `torch.set_num_threads(1)` only within a fixture and restores the previous setting afterward. Other tests and caller settings are not changed.
+The scientific regression test applies `torch.set_num_threads(1)` only within a fixture and restores the previous setting afterward. Other tests and caller settings are not changed. The long adding recurrence can also amplify numerical differences between CPUs and BLAS implementations even at one thread. Its automated regression therefore checks finite forward/backward outcomes, bounded states, large parameter gradients, and ordered backward growth rather than exact pointwise loss or norm values. The documented adding values below are local one-thread reference observations, not cross-machine constants.
 
 ## RNN and adjoint definitions
 
