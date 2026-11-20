@@ -14,6 +14,12 @@ from spbunn.rnn.audit import (
     TaskKind,
     audit_gradients,
 )
+from spbunn.rnn.examples import (
+    PredictionExamples,
+    PredictionExampleSettings,
+    make_adding_prediction_example,
+    make_copy_prediction_example,
+)
 from spbunn.rnn.tasks import generate_adding_batch, generate_copy_batch
 
 _DTYPES = {"float32": torch.float32, "float64": torch.float64}
@@ -47,10 +53,12 @@ class BPTTSettings:
 
     batch_size: int
     hidden_size: int
+    figure_max_points: int
     primary_dtype: DtypeName
     verification_dtype: DtypeName | None
     copy: CopyAuditSettings
     adding: AddingAuditSettings
+    examples: PredictionExampleSettings
 
 
 @dataclass(frozen=True)
@@ -67,12 +75,18 @@ class BPTTExperimentResult:
     settings: BPTTSettings
     primary_results: tuple[GradientAudit, ...]
     verification_results: tuple[GradientAudit, ...]
+    prediction_examples: PredictionExamples
 
 
 def produce_bptt_input(cfg: DictConfig) -> BPTTExperimentInput:
     """Resolve and validate all numerical audit settings."""
     batch_size = _positive_config_integer(cfg.batch_size, "The batch size")
     hidden_size = _positive_config_integer(cfg.hidden_size, "The hidden size")
+    figure_max_points = _positive_config_integer(
+        cfg.report.figure_max_points, "The figure point limit"
+    )
+    if figure_max_points < 2:
+        raise ValueError("The figure point limit must be at least two")
     primary_dtype = _parse_dtype(cfg.primary_dtype, "The primary dtype")
     if primary_dtype != "float32":
         raise ValueError("The primary audit dtype must be float32")
@@ -125,10 +139,12 @@ def produce_bptt_input(cfg: DictConfig) -> BPTTExperimentInput:
     settings = BPTTSettings(
         batch_size=batch_size,
         hidden_size=hidden_size,
+        figure_max_points=figure_max_points,
         primary_dtype=primary_dtype,
         verification_dtype=verification_dtype,
         copy=copy,
         adding=adding,
+        examples=_example_settings(cfg),
     )
     return BPTTExperimentInput(settings=settings)
 
@@ -198,6 +214,22 @@ def evaluate_bptt_experiment(
         settings=settings,
         primary_results=tuple(primary_results),
         verification_results=tuple(verification_results),
+        prediction_examples=PredictionExamples(
+            copy=make_copy_prediction_example(
+                symbol_count=settings.copy.symbol_count,
+                memorize_length=settings.examples.copy_memorize_length,
+                gap=settings.examples.copy_gap,
+                hidden_size=settings.hidden_size,
+                model_seed=settings.examples.model_seed,
+                data_seed=settings.examples.data_seed,
+            ),
+            adding=make_adding_prediction_example(
+                length=settings.examples.adding_length,
+                hidden_size=settings.hidden_size,
+                model_seed=settings.examples.model_seed,
+                data_seed=settings.examples.data_seed,
+            ),
+        ),
     )
 
 
@@ -236,6 +268,32 @@ def _audit_case(
         hidden_size=settings.hidden_size,
         dtype=dtype,
     )
+
+
+def _example_settings(cfg: DictConfig) -> PredictionExampleSettings:
+    settings = PredictionExampleSettings(
+        copy_memorize_length=_positive_config_integer(
+            cfg.examples.copy_memorize_length, "The example copy length"
+        ),
+        copy_gap=_non_negative_config_integer(
+            cfg.examples.copy_gap, "The example copy gap"
+        ),
+        adding_length=_positive_config_integer(
+            cfg.examples.adding_length, "The example adding length"
+        ),
+        model_seed=_non_negative_config_integer(
+            cfg.examples.model_seed, "The example model seed"
+        ),
+        data_seed=_non_negative_config_integer(
+            cfg.examples.data_seed, "The example data seed"
+        ),
+        animation_interval_ms=_positive_config_integer(
+            cfg.report.animation_interval_ms, "The animation interval"
+        ),
+    )
+    if settings.adding_length < 2:
+        raise ValueError("The example adding length must be at least two")
+    return settings
 
 
 def _copy_initializations(values: Any) -> tuple[Initialization, ...]:

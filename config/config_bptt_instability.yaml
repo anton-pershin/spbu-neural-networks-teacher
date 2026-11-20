@@ -25,6 +25,14 @@ adding_task:
   initialization: xavier_tanh
   seeds: [7, 42, 123]
   data_seed: 1200
+examples:
+  copy_memorize_length: 3
+  copy_gap: 2
+  adding_length: 6
+  model_seed: 42
+  data_seed: 2026
 report:
   title: BPTT instability in vanilla RNNs
   artifact_name: bptt_instability.html
+  figure_max_points: 32
+  animation_interval_ms: 900

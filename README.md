@@ -148,7 +148,7 @@ python -m spbunn.scripts.bptt_instability
 
 The pipeline uses deterministic synthetic batches and needs no external dataset or network access. The copy memory task demonstrates exponentially vanishing hidden-state adjoints under default and orthogonal initializations. The adding problem demonstrates exponentially growing adjoints under the documented Xavier `tanh` initialization while forward states remain bounded. Models are audited with one backward pass and are not trained.
 
-The default run writes `bptt_instability.html` and two log-scaled figures, `bptt_copy_gradient_flow` and `bptt_adding_gradient_flow`, into `result_dir`. Exact zeros remain visible in numerical tables; only the figures use a disclosed display floor. Matched-weight float64 checks distinguish numerical underflow from the underlying gradient trend.
+The default run writes `bptt_instability.html` and two pruned, log-scaled SVG figures, `bptt_copy_gradient_flow` and `bptt_adding_gradient_flow`, into `result_dir`. Exact zeros remain visible in numerical tables; only the figures use a disclosed display floor. Matched-weight float64 checks distinguish numerical underflow from the underlying gradient trend. Concrete input/target/output examples and two inline HTML animations provide Play, Pause, Previous, and Next controls for every per-step prediction.
 
 Use `config/config_test_bptt_instability.yaml` for a reduced test run. See [docs/bptt_instability.md](docs/bptt_instability.md) for task and initialization definitions, audit equations, production observations, configuration, artifact names, and tests.
 

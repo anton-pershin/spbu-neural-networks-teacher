@@ -2,11 +2,19 @@
 
 import math
 from html import escape
+from typing import Any
 
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.figure import Figure
+from matplotlib.ticker import LogLocator
 
 from spbunn.reporting.models import FigureModel, ReportModel
+from spbunn.reporting.rnn_animation import (
+    build_adding_prediction_example,
+    build_animation_script,
+    build_copy_prediction_example,
+)
 from spbunn.rnn.audit import GradientAudit, Initialization, TaskKind
 from spbunn.rnn.pipeline import BPTTExperimentResult
 from spbunn.rnn.tasks import adding_mean_baseline_mse, copy_memoryless_loss
@@ -18,6 +26,14 @@ BPTT_FIGURE_STEMS = (
 DISPLAY_ZERO_FLOOR = 1e-45
 
 
+class _SvgTextFigure(Figure):
+    """Save SVG labels as text without changing process-global rcParams."""
+
+    def savefig(self, *args: Any, **kwargs: Any) -> Any:
+        with plt.rc_context({"svg.fonttype": "none"}):
+            return super().savefig(*args, **kwargs)
+
+
 def build_bptt_report(
     result: BPTTExperimentResult, title: str, artifact_name: str
 ) -> ReportModel:
@@ -27,9 +43,15 @@ def build_bptt_report(
         _introduction(result),
         _method_section(result),
         _copy_section(result),
+        build_copy_prediction_example(result.prediction_examples.copy),
         _adding_section(result),
+        build_adding_prediction_example(result.prediction_examples.adding),
         _verification_section(result),
         _limitations_section(),
+        build_animation_script(
+            result.prediction_examples,
+            interval_ms=result.settings.examples.animation_interval_ms,
+        ),
     ]
     with plt.rc_context(
         {
@@ -95,7 +117,12 @@ def _method_section(result: BPTTExperimentResult) -> str:
         f"Only the log-scaled figures replace exact zeros with the disclosed "
         f"display floor {DISPLAY_ZERO_FLOOR:.0e}. Matched-weight float64 "
         f"verification: {verification} The same float32 weights and generated "
-        "data are cast to float64 for these checks.</p></section>"
+        "data are cast to float64 for these checks.</p>"
+        f"<p>Longest-case figure curves retain at most "
+        f"{result.settings.figure_max_points} uniformly spaced points, including "
+        "both endpoints. Pruning affects only the display, not the stored "
+        "numerical results. It reduces the serialized SVG size so the shared "
+        "writer can apply its normal SVG/PNG threshold.</p></section>"
     )
 
 
@@ -130,6 +157,15 @@ def _copy_section(result: BPTTExperimentResult) -> str:
         "<code>torch.nn.init.orthogonal_</code> to the recurrent matrix without "
         "a scale factor. Neither initialization is selected by spectral radius."
         "</p>"
+        "<p>Orthogonal initialization is motivated by norm preservation in a "
+        "linear map: <code>Q<sup>T</sup>Q = I</code> and "
+        "<code>||Qx||<sub>2</sub> = ||x||<sub>2</sub></code>. It avoids a "
+        "systematic initial shrinkage or amplification from the recurrent "
+        "matrix itself, which is useful when the same matrix is applied many "
+        "times. It does not make the full recurrent Jacobian orthogonal: the "
+        "<code>tanh</code> derivative factors still shrink or redirect the "
+        "adjoint. Orthogonal initialization therefore delays decay but cannot "
+        "guarantee long-range gradient flow.</p>"
         f"<p>The table contains every longest case (gap {max(settings.gaps)}). "
         "The first figure contains all gaps and seeds. Exact zeros in the table "
         "are numerical underflow outcomes, not mathematical claims that the "
@@ -281,12 +317,13 @@ def _limitations_section() -> str:
 
 def _copy_figure(result: BPTTExperimentResult) -> FigureModel:
     settings = result.settings.copy
-    figure, axes = plt.subplots(2, 2, figsize=(16, 11), squeeze=False)
+    figure = plt.figure(FigureClass=_SvgTextFigure, figsize=(16, 6))
+    curve_axis, length_axis = figure.subplots(1, 2)
     longest = max(settings.gaps)
-    for row, initialization in enumerate(settings.initializations):
-        curve_axis = axes[row, 0]
-        length_axis = axes[row, 1]
+    for initialization in settings.initializations:
+        line_style = "-" if initialization == "default" else "--"
         for seed in settings.seeds:
+            label = f"{initialization}, seed {seed}"
             longest_result = _primary(
                 result,
                 task="copy",
@@ -294,7 +331,13 @@ def _copy_figure(result: BPTTExperimentResult) -> FigureModel:
                 seed=seed,
                 task_length=longest,
             )
-            _plot_longest_curve(curve_axis, longest_result)
+            _plot_longest_curve(
+                curve_axis,
+                longest_result,
+                result.settings.figure_max_points,
+                label=label,
+                line_style=line_style,
+            )
             cases = [
                 _primary(
                     result,
@@ -305,17 +348,23 @@ def _copy_figure(result: BPTTExperimentResult) -> FigureModel:
                 )
                 for gap in settings.gaps
             ]
-            _plot_first_state(length_axis, cases, settings.gaps)
-        _style_curve_axis(curve_axis, f"{initialization}: longest gap {longest}")
-        _style_length_axis(length_axis, f"{initialization}: first input state")
+            _plot_first_state(
+                length_axis,
+                cases,
+                settings.gaps,
+                label=label,
+                line_style=line_style,
+            )
+    _style_curve_axis(curve_axis, f"Copy: longest gap {longest}")
+    _style_length_axis(length_axis, "Copy: first input state")
     figure.tight_layout()
     return FigureModel(figure=figure, artifact_name=BPTT_FIGURE_STEMS[0])
 
 
 def _adding_figure(result: BPTTExperimentResult) -> FigureModel:
     settings = result.settings.adding
-    figure, axes = plt.subplots(1, 2, figsize=(16, 5.5))
-    curve_axis, length_axis = axes
+    figure = plt.figure(FigureClass=_SvgTextFigure, figsize=(16, 5.5))
+    curve_axis, length_axis = figure.subplots(1, 2)
     longest = max(settings.lengths)
     for seed in settings.seeds:
         longest_result = _primary(
@@ -325,7 +374,9 @@ def _adding_figure(result: BPTTExperimentResult) -> FigureModel:
             seed=seed,
             task_length=longest,
         )
-        _plot_longest_curve(curve_axis, longest_result)
+        _plot_longest_curve(
+            curve_axis, longest_result, result.settings.figure_max_points
+        )
         cases = [
             _primary(
                 result,
@@ -343,27 +394,52 @@ def _adding_figure(result: BPTTExperimentResult) -> FigureModel:
     return FigureModel(figure=figure, artifact_name=BPTT_FIGURE_STEMS[1])
 
 
-def _plot_longest_curve(axis: Axes, result: GradientAudit) -> None:
+def _plot_longest_curve(
+    axis: Axes,
+    result: GradientAudit,
+    max_points: int,
+    *,
+    label: str | None = None,
+    line_style: str = "-",
+) -> None:
     values = tuple(reversed(result.relative_state_gradients))
-    lags = range(len(values))
+    indices = _pruned_indices(len(values), max_points)
     axis.plot(
-        lags,
-        _display_values(values),
-        marker=".",
-        markersize=3,
-        label=f"seed {result.seed}",
+        indices,
+        _display_values(tuple(values[index] for index in indices)),
+        label=label or f"seed {result.seed}",
+        linestyle=line_style,
+    )
+
+
+def _pruned_indices(length: int, max_points: int) -> tuple[int, ...]:
+    if length <= max_points:
+        return tuple(range(length))
+    return tuple(
+        sorted(
+            {
+                round(index * (length - 1) / (max_points - 1))
+                for index in range(max_points)
+            }
+        )
     )
 
 
 def _plot_first_state(
-    axis: Axes, cases: list[GradientAudit], lengths: tuple[int, ...]
+    axis: Axes,
+    cases: list[GradientAudit],
+    lengths: tuple[int, ...],
+    *,
+    label: str | None = None,
+    line_style: str = "-",
 ) -> None:
     values = tuple(case.relative_state_gradients[0] for case in cases)
     axis.plot(
         lengths,
         _display_values(values),
         marker="o",
-        label=f"seed {cases[0].seed}",
+        label=label or f"seed {cases[0].seed}",
+        linestyle=line_style,
     )
 
 
@@ -372,7 +448,9 @@ def _style_curve_axis(axis: Axes, title: str) -> None:
     axis.set_xlabel(r"Lag $\tau$")
     axis.set_ylabel(r"Mean relative gradient $r(\tau)$")
     axis.set_title(f"{title}\n0 is the final state; the largest lag is the first state")
-    axis.grid(True, which="both", alpha=0.25)
+    axis.yaxis.set_major_locator(LogLocator(base=10.0, numticks=12))
+    axis.minorticks_off()
+    axis.grid(True, which="major", alpha=0.25)
     axis.legend()
     axis.text(
         0.01,
@@ -388,7 +466,9 @@ def _style_length_axis(axis: Axes, title: str) -> None:
     axis.set_xlabel("Task length or blank gap")
     axis.set_ylabel("First-state relative gradient")
     axis.set_title(title)
-    axis.grid(True, which="both", alpha=0.25)
+    axis.yaxis.set_major_locator(LogLocator(base=10.0, numticks=12))
+    axis.minorticks_off()
+    axis.grid(True, which="major", alpha=0.25)
     axis.legend()
 
 

@@ -53,7 +53,8 @@ class RecurrentAuditModel(nn.Module):
         states = []
         for time_index in range(inputs.shape[1]):
             hidden = self.cell(inputs[:, time_index], hidden)
-            hidden.retain_grad()
+            if hidden.requires_grad:
+                hidden.retain_grad()
             states.append(hidden)
         logits = self.readout(torch.stack(states, dim=1))
         return tuple(states), logits

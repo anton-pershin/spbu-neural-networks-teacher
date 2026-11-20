@@ -180,6 +180,8 @@ def test_reduced_experiment_is_deterministic_and_verification_can_be_disabled() 
     [
         (["batch_size=0"], "batch size"),
         (["hidden_size=1.5"], "finite integers"),
+        (["report.figure_max_points=1"], "at least two"),
+        (["examples.adding_length=1"], "at least two"),
         (["primary_dtype=float64"], "primary audit dtype"),
         (["verification.dtype=float32"], "verification audit dtype"),
         (["verification.enabled=1"], "must be a boolean"),

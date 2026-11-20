@@ -13,3 +13,4 @@ adding_task:
 report:
   title: Test BPTT instability in vanilla RNNs
   artifact_name: test_bptt_instability.html
+  figure_max_points: 24
