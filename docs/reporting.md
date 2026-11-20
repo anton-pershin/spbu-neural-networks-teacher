@@ -10,13 +10,13 @@ M1 provides this interface. M2 connects the three optimization scripts, M3 conne
 
 Import the public interface from `spbunn.reporting`:
 
-- `FigureModel(figure, artifact_name)` contains a Matplotlib `Figure` and a file-name stem.
+- `FigureModel(figure, artifact_name, caption="")` contains a Matplotlib `Figure`, a file-name stem, and an optional visible caption.
 - `ReportModel(html_content, figures=(), title=..., artifact_name=...)` contains an HTML body fragment, a tuple of figure models, a document title, and the HTML file name.
 - `ReportWriter(run_directory)` receives the output directory explicitly, normally from `cfg.result_dir`.
 
 The dataclasses are frozen. The caller still owns each mutable Matplotlib figure and must close it when appropriate.
 
-`html_content` is trusted HTML, not escaped text. Use HTML elements and LaTeX notation in this field. `title` is escaped by the writer. Figure elements are appended after the supplied body content in model order.
+`html_content` is trusted HTML, not escaped text. Use HTML elements and LaTeX notation in this field. `title` and figure captions are escaped by the writer. Figure elements are appended after the supplied body content in model order.
 
 ## Output contract
 
@@ -28,7 +28,7 @@ The dataclasses are frozen. The caller still owns each mutable Matplotlib figure
 4. Write the SVG bytes when their length is at most `SVG_SIZE_THRESHOLD_BYTES` (102,400 bytes).
 5. Write only a PNG instead when the SVG is larger than the threshold.
 6. Remove a stale artifact with the alternative extension for the same figure stem.
-7. Add an image element with the selected file name to the HTML body.
+7. Add an image element with the selected file name to the HTML body. When `caption` is non-empty, add an escaped `figcaption` directly below that image; an empty caption adds no element.
 8. Embed the packaged MathJax runtime and write the HTML as UTF-8.
 9. Return the HTML artifact's `Path`.
 

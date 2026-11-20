@@ -66,9 +66,33 @@ def test_write_creates_html_with_latex_support_and_figure(tmp_path: Path) -> Non
     assert re.search(r"<script\b[^>]*\bsrc=", html) is None
     assert "cdn.jsdelivr.net/npm/mathjax" not in html
     assert '<img src="line.svg"' in html
+    assert "<figcaption>" not in html
+    assert "figcaption {" not in html
     assert (run_directory / "line.svg").is_file()
     assert not (run_directory / "line.png").exists()
     assert set(run_directory.iterdir()) == {report_path, run_directory / "line.svg"}
+
+
+def test_write_escapes_optional_figure_caption(tmp_path: Path) -> None:
+    report = ReportModel(
+        html_content="",
+        figures=(
+            FigureModel(
+                figure=controlled_figure(100),
+                artifact_name="captioned",
+                caption="Copy task <script>alert(1)</script> & gradient flow",
+            ),
+        ),
+    )
+
+    ReportWriter(tmp_path).write(report)
+
+    html = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert (
+        "<figcaption>Copy task &lt;script&gt;alert(1)&lt;/script&gt; "
+        "&amp; gradient flow</figcaption>"
+    ) in html
+    assert "<script>alert(1)</script>" not in html
 
 
 @pytest.mark.parametrize("svg_size", [102_399, 102_400])

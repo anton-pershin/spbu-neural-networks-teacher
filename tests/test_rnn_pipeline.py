@@ -236,6 +236,8 @@ def test_executable_pipeline_writes_complete_offline_report(tmp_path: Path) -> N
     assert re.search(r"<script\b[^>]*\bsrc=", html) is None
     assert "Copy memory task: gradient decay" in html
     assert "Adding problem: gradient growth" in html
+    assert "<figcaption>Figure 1 — Copy memory task." in html
+    assert "<figcaption>Figure 2 — Adding problem." in html
     image_names = re.findall(r'<img src="([^"]+)"', html)
     assert len(image_names) == 2
     assert {Path(name).stem for name in image_names} == {

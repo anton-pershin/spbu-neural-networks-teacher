@@ -192,7 +192,7 @@ Producers only generate or load experiment input. Transformers only compute nume
 |---|---|
 | Experiment input | Pipeline-specific images, kernels, numerical grids, samples, training data, word frequencies, held-out words, model settings, and hyperparameter grids |
 | Experiment result | Numerical curves, transformed images, predictions, training histories, gradients, norms, Jacobian metrics, optimization results, token sequences, merge traces, and token-count metrics |
-| Report model | HTML content, figure objects, and artifact names required by the report |
+| Report model | HTML content, figure objects, artifact names, and optional figure captions required by the report |
 
 **Shared report writer.** The report writer is the single consumer used by every pipeline. It writes the report model's HTML with LaTeX support and figures into the Hydra-configured run directory. For each figure, it serializes the SVG representation, saves SVG when its size is at most 102,400 bytes, and otherwise saves PNG instead of SVG. It performs no model fitting or other numerical experiment work.
 

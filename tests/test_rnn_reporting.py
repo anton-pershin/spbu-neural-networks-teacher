@@ -21,6 +21,14 @@ def test_report_contains_both_experiments_verification_and_scope_limits() -> Non
             == BPTT_FIGURE_STEMS
         )
         assert [len(figure.figure.axes) for figure in report.figures] == [2, 2]
+        copy_figure, adding_figure = report.figures
+        assert "Figure 1 — Copy memory task" in copy_figure.caption
+        assert "solid lines" in copy_figure.caption
+        assert "dashed lines" in copy_figure.caption
+        assert "Right: first-input-state" in copy_figure.caption
+        assert "Figure 2 — Adding problem" in adding_figure.caption
+        assert "backward amplification" in adding_figure.caption
+        assert "Xavier-tanh initialization" in adding_figure.caption
         html = report.html_content
         assert "BPTT instability in vanilla RNNs" in html
         assert r"h_t=\tanh(W_xx_t+W_hh_{t-1}+b)" in html
@@ -92,12 +100,14 @@ def test_report_figures_use_log_scales_and_readable_local_fonts() -> None:
         for report_figure in report.figures:
             for axis in report_figure.figure.axes:
                 assert axis.get_yscale() == "log"
-                assert float(axis.xaxis.label.get_fontsize()) >= 15
-                assert float(axis.yaxis.label.get_fontsize()) >= 15
-                assert float(axis.title.get_fontsize()) >= 15
-                assert float(axis.get_xticklabels()[0].get_fontsize()) >= 13
-                assert float(axis.get_yticklabels()[0].get_fontsize()) >= 13
+                assert axis.get_title() == ""
+                assert float(axis.xaxis.label.get_fontsize()) >= 20
+                assert float(axis.yaxis.label.get_fontsize()) >= 20
+                assert float(axis.get_xticklabels()[0].get_fontsize()) >= 16
+                assert float(axis.get_yticklabels()[0].get_fontsize()) >= 16
                 assert axis.get_legend() is not None
+                for line in axis.lines:
+                    assert line.get_linewidth() == 2
         copy_figure, adding_figure = report.figures
         assert all(len(axis.lines) == 4 for axis in copy_figure.figure.axes)
         assert all(len(axis.lines) == 2 for axis in adding_figure.figure.axes)
@@ -110,8 +120,9 @@ def test_report_figures_use_log_scales_and_readable_local_fonts() -> None:
         for line in adding_figure.figure.axes[0].lines:
             x_data = np.asarray(line.get_xdata())
             assert len(x_data) <= 24
-        assert "longest gap 20" in copy_figure.figure.axes[0].get_title()
-        assert "longest length 20" in adding_figure.figure.axes[0].get_title()
+        for figure_model in (copy_figure, adding_figure):
+            for line in figure_model.figure.axes[1].lines:
+                assert line.get_markersize() >= 10
         original_svg_font_type = plt.rcParams["svg.fonttype"]
         svg_buffer = BytesIO()
         copy_figure.figure.savefig(svg_buffer, format="svg")

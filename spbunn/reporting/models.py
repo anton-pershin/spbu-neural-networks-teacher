@@ -5,10 +5,11 @@ from matplotlib.figure import Figure
 
 @dataclass(frozen=True)
 class FigureModel:
-    """A Matplotlib figure and the stem of its output artifact name."""
+    """A Matplotlib figure, artifact stem, and optional visible caption."""
 
     figure: Figure
     artifact_name: str
+    caption: str = ""
 
 
 @dataclass(frozen=True)

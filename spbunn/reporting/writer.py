@@ -33,9 +33,15 @@ class ReportWriter:
         figure_path = self._write_figure(model)
         source = escape(quote(figure_path.name), quote=True)
         alternative_text = escape(model.artifact_name, quote=True)
+        caption_markup = (
+            f"  <figcaption>{escape(model.caption)}</figcaption>\n"
+            if model.caption
+            else ""
+        )
         return (
             "<figure>\n"
             f'  <img src="{source}" alt="{alternative_text}">\n'
+            f"{caption_markup}"
             "</figure>"
         )
 

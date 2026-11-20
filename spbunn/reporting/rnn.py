@@ -55,12 +55,12 @@ def build_bptt_report(
     ]
     with plt.rc_context(
         {
-            "font.size": 14.0,
-            "axes.titlesize": 15.0,
-            "axes.labelsize": 15.0,
-            "xtick.labelsize": 13.0,
-            "ytick.labelsize": 13.0,
-            "legend.fontsize": 13.0,
+            "font.size": 18.0,
+            "axes.titlesize": 20.0,
+            "axes.labelsize": 20.0,
+            "xtick.labelsize": 16.0,
+            "ytick.labelsize": 16.0,
+            "legend.fontsize": 16.0,
         }
     ):
         figures = (
@@ -317,7 +317,7 @@ def _limitations_section() -> str:
 
 def _copy_figure(result: BPTTExperimentResult) -> FigureModel:
     settings = result.settings.copy
-    figure = plt.figure(FigureClass=_SvgTextFigure, figsize=(16, 6))
+    figure = plt.figure(FigureClass=_SvgTextFigure, figsize=(18, 7))
     curve_axis, length_axis = figure.subplots(1, 2)
     longest = max(settings.gaps)
     for initialization in settings.initializations:
@@ -355,15 +355,28 @@ def _copy_figure(result: BPTTExperimentResult) -> FigureModel:
                 label=label,
                 line_style=line_style,
             )
-    _style_curve_axis(curve_axis, f"Copy: longest gap {longest}")
-    _style_length_axis(length_axis, "Copy: first input state")
+    _style_curve_axis(curve_axis)
+    _style_length_axis(length_axis)
     figure.tight_layout()
-    return FigureModel(figure=figure, artifact_name=BPTT_FIGURE_STEMS[0])
+    caption = (
+        f"Figure 1 — Copy memory task. Left: mean relative hidden-state gradient "
+        f"norm versus lag at the longest blank gap, {longest}. Default "
+        "initialization uses solid lines and orthogonal initialization uses "
+        "dashed lines; every configured seed is shown. Lag zero is the final "
+        "hidden state, and increasing lag moves backward toward the first "
+        "input. Right: first-input-state relative gradient for each configured "
+        "blank gap. Both vertical axes are logarithmic. Exact zeros are drawn "
+        f"at {DISPLAY_ZERO_FLOOR:.0e} for display only, and long curves are "
+        f"pruned to at most {result.settings.figure_max_points} points."
+    )
+    return FigureModel(
+        figure=figure, artifact_name=BPTT_FIGURE_STEMS[0], caption=caption
+    )
 
 
 def _adding_figure(result: BPTTExperimentResult) -> FigureModel:
     settings = result.settings.adding
-    figure = plt.figure(FigureClass=_SvgTextFigure, figsize=(16, 5.5))
+    figure = plt.figure(FigureClass=_SvgTextFigure, figsize=(18, 6.5))
     curve_axis, length_axis = figure.subplots(1, 2)
     longest = max(settings.lengths)
     for seed in settings.seeds:
@@ -388,10 +401,23 @@ def _adding_figure(result: BPTTExperimentResult) -> FigureModel:
             for length in settings.lengths
         ]
         _plot_first_state(length_axis, cases, settings.lengths)
-    _style_curve_axis(curve_axis, f"Xavier tanh: longest length {longest}")
-    _style_length_axis(length_axis, "Xavier tanh: first input state")
+    _style_curve_axis(curve_axis)
+    _style_length_axis(length_axis)
     figure.tight_layout()
-    return FigureModel(figure=figure, artifact_name=BPTT_FIGURE_STEMS[1])
+    caption = (
+        f"Figure 2 — Adding problem. Left: mean relative hidden-state gradient "
+        f"norm versus lag for the longest sequence, length {longest}, using "
+        "Xavier-tanh initialization and every configured seed. Lag zero is the "
+        "final hidden state, and increasing lag moves backward toward the "
+        "first marked-value input. Right: first-input-state relative gradient "
+        "for each configured sequence length. Both vertical axes are "
+        "logarithmic; upward curves indicate backward amplification. Exact "
+        f"zeros, if present, are drawn at {DISPLAY_ZERO_FLOOR:.0e}, and long "
+        f"curves are pruned to at most {result.settings.figure_max_points} points."
+    )
+    return FigureModel(
+        figure=figure, artifact_name=BPTT_FIGURE_STEMS[1], caption=caption
+    )
 
 
 def _plot_longest_curve(
@@ -409,6 +435,7 @@ def _plot_longest_curve(
         _display_values(tuple(values[index] for index in indices)),
         label=label or f"seed {result.seed}",
         linestyle=line_style,
+        linewidth=2,
     )
 
 
@@ -438,38 +465,38 @@ def _plot_first_state(
         lengths,
         _display_values(values),
         marker="o",
+        markersize=10,
         label=label or f"seed {cases[0].seed}",
         linestyle=line_style,
+        linewidth=2,
     )
 
 
-def _style_curve_axis(axis: Axes, title: str) -> None:
+def _style_curve_axis(axis: Axes) -> None:
     axis.set_yscale("log")
     axis.set_xlabel(r"Lag $\tau$")
     axis.set_ylabel(r"Mean relative gradient $r(\tau)$")
-    axis.set_title(f"{title}\n0 is the final state; the largest lag is the first state")
     axis.yaxis.set_major_locator(LogLocator(base=10.0, numticks=12))
     axis.minorticks_off()
     axis.grid(True, which="major", alpha=0.25)
-    axis.legend()
+    axis.legend(ncol=2)
     axis.text(
         0.01,
         0.02,
         f"Zeros, if present, are shown at {DISPLAY_ZERO_FLOOR:.0e}",
         transform=axis.transAxes,
-        fontsize=11,
+        fontsize=15,
     )
 
 
-def _style_length_axis(axis: Axes, title: str) -> None:
+def _style_length_axis(axis: Axes) -> None:
     axis.set_yscale("log")
     axis.set_xlabel("Task length or blank gap")
     axis.set_ylabel("First-state relative gradient")
-    axis.set_title(title)
     axis.yaxis.set_major_locator(LogLocator(base=10.0, numticks=12))
     axis.minorticks_off()
     axis.grid(True, which="major", alpha=0.25)
-    axis.legend()
+    axis.legend(ncol=2)
 
 
 def _display_values(values: tuple[float, ...]) -> tuple[float, ...]:
