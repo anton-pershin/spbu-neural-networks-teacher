@@ -69,6 +69,10 @@ def test_figure_scales_pruning_fonts_and_local_svg_text() -> None:
     for figure_index, figure in enumerate(report.figures):
         for axis in figure.figure.axes:
             assert axis.get_xlabel()
+            assert float(axis.xaxis.label.get_fontsize()) >= 20
+            assert float(axis.yaxis.label.get_fontsize()) >= 20
+            for tick in axis.get_xticklabels() + axis.get_yticklabels():
+                assert float(tick.get_fontsize()) >= 16
             for line in axis.lines:
                 assert line.get_linewidth() >= 2
                 if figure_index == 1 and line.get_linestyle() != "--":

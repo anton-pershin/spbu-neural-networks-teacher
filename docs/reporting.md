@@ -81,7 +81,7 @@ This example creates `index.html` and normally `quadratic.svg` in `/tmp/spbunn_h
 
 ## Tests
 
-`tests/test_reporting.py` uses temporary run directories. Controlled figure doubles provide exact SVG sizes of 102,399, 102,400, and 102,401 bytes. A real Matplotlib figure checks integration with HTML generation. The HTML test verifies exact inclusion of the packaged MathJax runtime, the absence of script sources, and disabled optional MathJax menu downloads. Other tests cover multiple figures, stale-format removal, and invalid, duplicate, or colliding artifact names.
+`tests/test_reporting.py` uses temporary run directories. Controlled figure doubles provide exact SVG sizes of 102,399, 102,400, and 102,401 bytes. A real Matplotlib figure checks integration with HTML generation. The HTML test verifies exact inclusion of the packaged MathJax runtime, the bold-vector macro, the absence of script sources, and disabled optional MathJax menu downloads. Other tests cover multiple figures, stale-format removal, and invalid, duplicate, or colliding artifact names.
 
 Run all checks from the repository root:
 

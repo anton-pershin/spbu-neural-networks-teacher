@@ -27,6 +27,7 @@ class LSTMUnroll:
 
     cell_states: tuple[torch.Tensor, ...]
     forget_gates: tuple[torch.Tensor, ...]
+    hidden_states: tuple[torch.Tensor, ...]
     logits: torch.Tensor
 
 
@@ -159,6 +160,7 @@ class CopyLSTMModel(nn.Module):
         return LSTMUnroll(
             cell_states=tuple(cell_states),
             forget_gates=tuple(forget_gates),
+            hidden_states=tuple(hidden_states),
             logits=logits,
         )
 

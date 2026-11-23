@@ -8,7 +8,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from matplotlib.ticker import LogLocator
+from matplotlib.ticker import LogLocator, MaxNLocator
 
 from spbunn.reporting.models import FigureModel, ReportModel
 from spbunn.rnn.gradient_audit import LSTMGradientAudit, RNNGradientAudit
@@ -259,6 +259,8 @@ def _training_figure(result: GradientFlowExperimentResult) -> FigureModel:
         )
         axis.set(xlabel=f"Optimizer update — gap {gap}", ylabel="Validation loss")
         axis.grid(alpha=0.2)
+    for axis in axes[1::2]:
+        axis.set_ylabel("")
     _add_legend(figure, axes[-1])
     return FigureModel(
         figure=figure,
@@ -329,6 +331,8 @@ def _state_gradient_figure(result: GradientFlowExperimentResult) -> FigureModel:
                 limit=result.settings.figure_max_points,
             )
         _style_log_axis(axis, f"Lag τ — gap {gap}")
+    for axis in axes[1::2]:
+        axis.set_ylabel("")
     _add_legend(figure, axes[-1])
     return FigureModel(
         figure=figure,
@@ -387,7 +391,7 @@ def _cell_path_figure(result: GradientFlowExperimentResult) -> FigureModel:
             limit=result.settings.figure_max_points,
         )
         _style_log_axis(axis, f"Lag τ — {phase}")
-    _add_legend(figure, axes[-1])
+    _add_legend(figure, axes[-1], bottom=0.3)
     return FigureModel(
         figure=figure,
         artifact_name=FIGURE_STEMS[3],
@@ -418,9 +422,10 @@ def _forget_gate_figure(result: GradientFlowExperimentResult) -> FigureModel:
             x, y = _prune(steps, gates, result.settings.figure_max_points)
             axis.plot(x, y, linewidth=2, linestyle=style, label=label, color=color)
         axis.set(
-            xlabel=f"Blank-gap step (0 is delimiter) — gap {gap}",
+            xlabel=f"Blank-gap step — gap {gap}",
             ylim=(0, 1.03),
         )
+        axis.xaxis.set_major_locator(MaxNLocator(6))
         axis.grid(alpha=0.2)
     axes[0].set_ylabel("Mean forget activation")
     _add_legend(figure, axes[-1])
@@ -480,7 +485,7 @@ def _style_log_axis(axis: Axes, xlabel: str) -> None:
     axis.set_ylabel("Relative gradient norm")
 
 
-def _add_legend(figure: Figure, axis: Axes) -> None:
+def _add_legend(figure: Figure, axis: Axes, *, bottom: float = 0.2) -> None:
     handles, labels = axis.get_legend_handles_labels()
     unique = dict(zip(labels, handles, strict=True))
     figure.legend(
@@ -490,7 +495,7 @@ def _add_legend(figure: Figure, axis: Axes) -> None:
         ncol=2,
         frameon=False,
     )
-    figure.subplots_adjust(bottom=0.2)
+    figure.subplots_adjust(bottom=bottom)
 
 
 def _prune(

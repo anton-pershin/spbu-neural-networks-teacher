@@ -23,10 +23,17 @@ def test_rnn_packed_and_explicit_recurrences_match() -> None:
         input_size=10,
     )
 
-    packed = model(batch.inputs)
+    packed_states, final_hidden = model.recurrent(batch.inputs)
+    packed = model.readout(packed_states)
     unroll = model.unroll(batch.inputs, retain_states=False)
 
     torch.testing.assert_close(unroll.logits, packed, rtol=1e-5, atol=1e-6)
+    torch.testing.assert_close(
+        torch.stack(unroll.states, dim=1), packed_states, rtol=1e-5, atol=1e-6
+    )
+    torch.testing.assert_close(
+        unroll.states[-1], final_hidden[-1], rtol=1e-5, atol=1e-6
+    )
     assert len(unroll.states) == batch.inputs.shape[1]
 
 
@@ -41,10 +48,23 @@ def test_lstm_packed_and_explicit_recurrences_match() -> None:
         input_size=10,
     )
 
-    packed = model(batch.inputs)
+    packed_states, (final_hidden, final_cell) = model.recurrent(batch.inputs)
+    packed = model.readout(packed_states)
     unroll = model.unroll(batch.inputs, retain_states=False)
 
     torch.testing.assert_close(unroll.logits, packed, rtol=1e-5, atol=1e-6)
+    torch.testing.assert_close(
+        torch.stack(unroll.hidden_states, dim=1),
+        packed_states,
+        rtol=1e-5,
+        atol=1e-6,
+    )
+    torch.testing.assert_close(
+        unroll.hidden_states[-1], final_hidden[-1], rtol=1e-5, atol=1e-6
+    )
+    torch.testing.assert_close(
+        unroll.cell_states[-1], final_cell[-1], rtol=1e-5, atol=1e-6
+    )
     assert len(unroll.cell_states) == batch.inputs.shape[1]
     assert len(unroll.forget_gates) == batch.inputs.shape[1]
     for gate in unroll.forget_gates:

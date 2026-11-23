@@ -11,13 +11,15 @@ import pytest
 import torch
 from omegaconf import DictConfig
 
-import spbunn.rnn.gradient_flow_pipeline as gradient_pipeline
 from spbunn.reporting import ReportWriter
+from spbunn.rnn import copy_training
+from spbunn.rnn import gradient_flow_pipeline as gradient_pipeline
 from spbunn.rnn.gradient_audit import LSTMGradientAudit
 from spbunn.rnn.gradient_flow_pipeline import (
     evaluate_gradient_flow_experiment,
     produce_gradient_flow_input,
 )
+from spbunn.rnn.models import build_copy_model
 from spbunn.scripts.gradient_flow_audit import gradient_flow_audit
 from spbunn.utils.common import get_project_path
 from tests.rnn_helpers import (
@@ -102,6 +104,46 @@ def test_verification_can_be_disabled() -> None:
     )
 
 
+def test_matched_float64_audit_preserves_weights_and_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    task = copy_training.CopyTaskSettings(symbol_count=2, memorize_length=2, gap=2)
+    batch = copy_training.make_copy_batch(
+        task, batch_size=3, seed=77, dtype=torch.float32
+    )
+    model = build_copy_model(
+        kind="lstm", initialization="default", seed=42, hidden_size=3, input_size=4
+    )
+    captured = {}
+    original_audit = gradient_pipeline._audit_model  # pylint: disable=protected-access
+
+    def capture_audit(converted_model, converted_batch, converted_task):
+        captured["model"] = converted_model
+        captured["batch"] = converted_batch
+        return original_audit(converted_model, converted_batch, converted_task)
+
+    monkeypatch.setattr(gradient_pipeline, "_audit_model", capture_audit)
+
+    result = (
+        gradient_pipeline._matched_float64_audit(  # pylint: disable=protected-access
+            model, batch, task
+        )
+    )
+
+    converted_model = captured["model"]
+    converted_batch = captured["batch"]
+    assert converted_model is not model
+    for original, converted in zip(
+        model.parameters(), converted_model.parameters(), strict=True
+    ):
+        assert converted.dtype == torch.float64
+        torch.testing.assert_close(converted, original.detach().to(torch.float64))
+    assert converted_batch.inputs.dtype == torch.float64
+    assert torch.equal(converted_batch.inputs, batch.inputs.to(torch.float64))
+    assert torch.equal(converted_batch.targets, batch.targets)
+    assert result.dtype == "float64"
+
+
 def test_every_arm_receives_the_same_data_schedule(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -114,12 +156,14 @@ def test_every_arm_receives_the_same_data_schedule(
         return original(*args, **kwargs)
 
     monkeypatch.setattr(gradient_pipeline, "make_copy_batch", record_batch)
+    monkeypatch.setattr(copy_training, "make_copy_batch", record_batch)
     cfg = compose_gradient_flow_config(
         overrides=["copy_task.gaps=[2]", "training_updates=1", "history_interval=1"]
     )
     evaluate_gradient_flow_experiment(produce_gradient_flow_input(cfg))
 
     arm_calls = calls[1:]
+    assert len(arm_calls) == 12
     arm_length = len(arm_calls) // 3
     assert arm_calls[:arm_length] == arm_calls[arm_length : 2 * arm_length]
     assert arm_calls[:arm_length] == arm_calls[2 * arm_length :]
