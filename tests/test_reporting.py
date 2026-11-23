@@ -63,6 +63,7 @@ def test_write_creates_html_with_latex_support_and_figure(tmp_path: Path) -> Non
     assert html.count(mathjax_runtime) == 1
     assert 'id="mathjax-runtime"' in html
     assert "options: {enableMenu: false}" in html
+    assert r'macros: {bm: ["\\boldsymbol{#1}", 1]}' in html
     assert re.search(r"<script\b[^>]*\bsrc=", html) is None
     assert "cdn.jsdelivr.net/npm/mathjax" not in html
     assert '<img src="line.svg"' in html

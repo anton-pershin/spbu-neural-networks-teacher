@@ -1,1 +1,1 @@
-"""Recurrent-network tasks and BPTT gradient audits."""
+"""Recurrent tasks, matched copy training, and RNN/LSTM gradient audits."""

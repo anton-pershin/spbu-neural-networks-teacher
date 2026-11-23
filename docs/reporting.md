@@ -4,7 +4,7 @@
 
 The reporting package separates pipeline-specific content from artifact persistence. Producers and transformers compute experiment results. A report builder converts those results into a report model. `ReportWriter` is the single component that writes the HTML report and its figures.
 
-M1 provides this interface. M2 connects the three optimization scripts, M3 connects the four MLP architecture and propagation scripts, M4 connects the convolution pipeline, M5 connects the BPE pipeline, and M6 connects the n-gram language-model pipeline.
+M1 provides this interface. M2 connects the three optimization scripts, M3 connects the four MLP architecture and propagation scripts, M4 connects the convolution pipeline, M5 connects the BPE pipeline, M6 connects the n-gram language-model pipeline, and M7 connects both recurrent-audit pipelines.
 
 ## Models
 
@@ -38,7 +38,7 @@ All artifact names must be non-empty file names without path components. For exa
 
 ## HTML and LaTeX
 
-The writer creates a complete HTML document with a UTF-8 charset, responsive image styling, the supplied body, and figure elements. It configures MathJax for inline notation delimited by `\(...\)` or `$...$`. Standard MathJax display notation is also available.
+The writer creates a complete HTML document with a UTF-8 charset, responsive image styling, the supplied body, and figure elements. It configures MathJax for inline notation delimited by `\(...\)` or `$...$`. Standard MathJax display notation is also available. A local `bm` macro expands to `\boldsymbol` so reports can use GetSomeMath's bold-vector notation without an external TeX package.
 
 The HTML embeds MathJax 3.2.2 directly in a script element. No script has an external `src` attribute. The full TeX-to-SVG component includes the standard TeX extensions and writes mathematical notation as SVG glyph paths, so rendering needs no external MathJax script, CDN, or web font. The optional MathJax menu is disabled to prevent optional component downloads. Reports and mathematical notation therefore render while browser network access is disabled.
 

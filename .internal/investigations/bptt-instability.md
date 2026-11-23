@@ -66,7 +66,7 @@ The repository has no recurrent pipeline. M1 supplies the shared report model an
 
 - [x] Complete the spec-defined automated checks and inspect the production report.
 - [ ] Obtain human educational approval of the rendered report, including offline mathematical rendering.
-- [ ] Coordinate any future #17 LSTM audit through shared recurrent utilities without expanding this increment.
+- [x] Coordinate issue #17 through the [gradient flow audit investigation](gradient-flow-audit.md) without expanding this increment.
 - [ ] Integrate the approved report into GetSomeMath separately if the maintainer wants it.
 
 ### Linked specs

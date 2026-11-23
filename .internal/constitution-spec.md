@@ -166,6 +166,16 @@ flowchart LR
   B -- "Report model" --> C["Report writer"]
 ```
 
+**Gradient flow audit — `gradient_flow_audit.py` orchestrator**
+
+```mermaid
+flowchart LR
+  O["Gradient flow orchestrator"] -. invokes .-> P["Fixed-gap settings producer"]
+  P -- "Validated audit settings" --> T["Matched copy trainer and retained-state auditor"]
+  T -- "Histories, losses, gradients, and gate diagnostics" --> B["Gradient flow report builder"]
+  B -- "Report model" --> C["Report writer"]
+```
+
 #### 4.2. Core components
 
 **Orchestrators and pipeline-specific filters.** Each orchestrator is a thin Hydra entry point at the path shown below. It resolves configuration, constructs the filters, connects their pipes, and invokes them in the order shown in section 4.1. It contains no numerical experiment, figure-rendering, or report-persistence logic.
@@ -183,6 +193,7 @@ flowchart LR
 | `spbunn/scripts/bpe.py` | Create the toy word frequencies; load and split the bundled book; construct merge, checkpoint, and sample settings | Learn ordered BPE merges; tokenize samples and held-out text; calculate checkpoint metrics | Two-part BPE report builder |
 | `spbunn/scripts/ngram.py` | Load and hash-check the offline NLTK Alice corpus; preprocess sentences and construct splits, vocabulary, and experiment settings | Train count-based n-gram models; select smoothing; evaluate perplexity and sparsity; calculate conditional distributions and generate samples | N-gram report builder |
 | `spbunn/scripts/bptt_instability.py` | Validate synthetic copy-task, adding-task, initialization, seed, length, and dtype-audit settings | Generate deterministic batches; unroll vanilla RNNs; measure retained hidden-state adjoints and numerical diagnostics | BPTT instability report builder |
+| `spbunn/scripts/gradient_flow_audit.py` | Validate fixed-gap copy-task, model, training, evaluation, audit, seed, and dtype settings | Train matched RNN/LSTM arms; evaluate reproduction positions; measure full and direct cell-path gradients and forget-gate diagnostics | Gradient flow report builder |
 
 Producers only generate or load experiment input. Transformers only compute numerical results. Each report builder is a reducer that converts its pipeline's results into a report model containing HTML content, figure objects, and artifact names. Report builders may share presentation utilities but own their pipeline-specific explanatory content. Reusable model, training, and numerical utilities are explicit dependencies of producer and transformer filters; they do not write artifacts or own pipeline orchestration.
 
@@ -208,7 +219,7 @@ Producers only generate or load experiment input. Transformers only compute nume
 | M4 | Convolution pipeline | Done | `simple_convolution.py` runs as a Hydra-configured pipeline and produces a complete HTML report and figures through the shared components. |
 | M5 | BPE pipeline | Done | `bpe.py` demonstrates token synthesis on a complete toy trace and evaluates a larger bundled corpus on held-out chapters, producing a complete two-part HTML report and figures through the shared components. |
 | M6 | N-gram language-model pipeline | To do | `ngram.py` trains count-based unigram, bigram, and trigram models on an offline corpus and produces a complete HTML report with perplexity, sparsity, conditional-probability, and generation examples through the shared components. |
-| M7 | Recurrent networks | To do | `bptt_instability.py` demonstrates exponentially vanishing and exploding BPTT gradients in vanilla RNNs on the copy memory task and adding problem, producing a complete HTML report and figures through the shared components. |
+| M7 | Recurrent networks | To do | `bptt_instability.py` demonstrates exponentially vanishing and exploding BPTT gradients in vanilla RNNs on the copy memory task and adding problem. `gradient_flow_audit.py` compares trained default RNN, orthogonally initialized RNN, and LSTM arms on fixed-gap copy tasks, including per-position losses, full and direct cell-path gradients, and forget-gate diagnostics. Both pipelines produce complete HTML reports and figures through the shared components. |
 
 M2, M3, M4, and M5 may proceed concurrently after M1. M6 and M7 may proceed independently after M1.
 

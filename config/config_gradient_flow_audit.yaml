@@ -1,0 +1,32 @@
+defaults:
+  - _self_
+  - user_settings: user_settings
+  - hydra: base
+
+result_dir: ${user_settings.result_dir}
+hydra_root: ${user_settings.hydra_root}
+hydra_dir: ${user_settings.hydra_dir}
+
+batch_size: 128
+audit_batch_size: 128
+validation_batch_size: 128
+validation_batches: 4
+hidden_size: 64
+training_updates: 5000
+history_interval: 500
+learning_rate: 0.001
+model_seed: 42
+training_data_seed: 100000
+validation_data_seed: 900000
+audit_data_seed: 800000
+verification:
+  enabled: true
+  dtype: float64
+copy_task:
+  symbol_count: 8
+  memorize_length: 10
+  gaps: [20, 50, 100, 200]
+report:
+  title: Gradient flow in vanilla RNNs and LSTMs
+  artifact_name: gradient_flow_audit.html
+  figure_max_points: 65

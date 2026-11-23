@@ -40,7 +40,13 @@
 | Vanilla RNN | A recurrent neural network whose hidden state at each step is a shared affine transformation of the input and previous hidden state followed by one element-wise activation. This pipeline uses `tanh`. |
 | Backpropagation through time (BPTT) | Reverse-mode automatic differentiation through the recurrent steps of an unrolled RNN. |
 | Hidden-state adjoint | The derivative of the configured loss with respect to one separate hidden-state tensor in the unrolled recurrence. |
-| Relative gradient norm | The L2 norm of a hidden-state adjoint divided by the final-state adjoint norm for the same sequence, followed by the configured batch average. |
+| Relative state-gradient norm | The L2 norm of a hidden-state adjoint at a configured lag divided by a reference-state adjoint norm for the same sequence, followed by the configured batch average. The BPTT audit uses the final state; the gradient-flow audit uses the last blank state before reproduction. |
+| Relative cell-gradient norm | The L2 norm of an LSTM cell-state adjoint at a configured lag divided by the reference cell-state adjoint norm for the same sequence, followed by the configured batch average. |
+| LSTM | A recurrent neural network with an additive internal cell state and input, forget, and output gates that control information flow between the cell and hidden states. |
+| Cell-state adjoint | The derivative of the configured loss with respect to one separate LSTM cell-state tensor in the unrolled recurrence. |
+| Direct cell-path contribution | The part of an earlier cell-state adjoint obtained by applying the intervening forget gates element-wise to the reference cell-state adjoint, without including hidden-state or other gate paths. |
+| Mean forget-gate activation | At one time step, the scalar average of all forget-gate components over the configured batch and hidden dimensions. |
+| Per-position loss | The mean cross-entropy at one reproduction position, evaluated separately from the other reproduction positions. |
 | Copy memory task | A synthetic task in which a model receives random symbols, a delimiter, a blank gap, and reproduction positions; loss measures reproduction of the original symbols. |
 | Blank gap | The sequence of blank inputs between the delimiter and the reproduction positions in the copy memory task. |
 | Adding problem | A synthetic task in which two marked values in a random sequence must be summed at the final output. |
