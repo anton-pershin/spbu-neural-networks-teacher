@@ -15,6 +15,7 @@ checked_paths=(
   spbunn/rnn
   spbunn/scripts/balduzzi_analysis.py
   spbunn/scripts/bptt_instability.py
+  spbunn/scripts/gradient_flow_audit.py
   spbunn/scripts/bpe.py
   spbunn/scripts/hidden_norms_propagation.py
   spbunn/scripts/loss_landscape.py

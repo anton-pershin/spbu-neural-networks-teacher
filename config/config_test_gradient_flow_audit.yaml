@@ -1,0 +1,17 @@
+defaults:
+  - config_gradient_flow_audit
+  - _self_
+
+batch_size: 4
+audit_batch_size: 4
+validation_batch_size: 4
+validation_batches: 1
+hidden_size: 4
+training_updates: 2
+history_interval: 1
+copy_task:
+  gaps: [2, 4]
+report:
+  title: Test gradient flow in vanilla RNNs and LSTMs
+  artifact_name: test_gradient_flow_audit.html
+  figure_max_points: 16
